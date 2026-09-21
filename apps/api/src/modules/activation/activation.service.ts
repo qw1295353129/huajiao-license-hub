@@ -12,6 +12,7 @@ import {
 } from '../../db/schema';
 import { AppError, ErrorCodes } from '../../common/errors';
 import { LicenseSignerService } from './license-signer.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import type { ActivateDto, DeactivateDto, OfflineRequestDto, TrialDto, VerifyDto } from './dto';
 
 export interface CallContext {
@@ -38,6 +39,7 @@ export class ActivationService {
     private readonly crypto: CryptoService,
     private readonly signer: LicenseSignerService,
     private readonly jwt: JwtService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   private get db() {
@@ -350,6 +352,25 @@ export class ActivationService {
       os: dto.device.os,
     });
 
+    await this.webhooks.emit('license.activated', {
+      licenseId: license.id,
+      keyMasked: license.keyMasked,
+      product: product.slug,
+      deviceId: device.id,
+      os: dto.device.os ?? null,
+      appVersion: dto.device.appVersion ?? null,
+      activeDevices,
+      isNewDevice: !existingActivation,
+    }).catch(() => undefined);
+    if (!existingActivation) {
+      await this.webhooks.emit('device.bound', {
+        licenseId: license.id,
+        deviceId: device.id,
+        os: dto.device.os ?? null,
+        activeDevices,
+      }).catch(() => undefined);
+    }
+
     const refreshed = { license: { ...license, status: 'active' as const }, plan, product };
     const licenseFile = await this.buildLicenseFile(refreshed, dto.device.fingerprint);
     const accessToken = await this.signClientToken(license.id, device.id, plan.heartbeatIntervalHours);
@@ -496,6 +517,17 @@ export class ActivationService {
       payload: { deviceId: device.id },
       ip: ctx.ip ?? null,
     });
+    await this.webhooks.emit('license.deactivated', {
+      licenseId: license.id,
+      keyMasked: license.keyMasked,
+      deviceId: device.id,
+      activeDevices,
+    }).catch(() => undefined);
+    await this.webhooks.emit('device.unbound', {
+      licenseId: license.id,
+      deviceId: device.id,
+      reason: dto.reason ?? 'client_request',
+    }).catch(() => undefined);
     return { valid: true, releasedDevices: 1, activeDevices, maxDevices: license.maxDevices };
   }
 
@@ -559,6 +591,12 @@ export class ActivationService {
       message: '试用授权已发放（' + days + ' 天）',
       ip: ctx.ip ?? null,
     });
+    await this.webhooks.emit('trial.created', {
+      licenseId: license.id,
+      product: product.slug,
+      days,
+      email: dto.email ?? null,
+    }).catch(() => undefined);
     return { ...activation, trial: { days, licenseKey: formatLicenseKey(rawKey) } };
   }
 
@@ -754,6 +792,12 @@ export class ActivationService {
       await this.db.update(licenseActivations)
         .set({ status: 'blocked', deactivatedAt: new Date(), unbindReason: 'device_blacklisted' })
         .where(and(eq(licenseActivations.deviceId, deviceId), eq(licenseActivations.status, 'active')));
+    }
+    if (blacklisted) {
+      await this.webhooks.emit('device.blacklisted', {
+        deviceId,
+        reason: reason ?? '管理员封禁',
+      }).catch(() => undefined);
     }
     void actor;
     return { ok: true, blacklisted };

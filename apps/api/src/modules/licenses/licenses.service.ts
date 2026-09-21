@@ -12,6 +12,7 @@ import { licenseActivations, licenseEvents, licenses, plans, products } from '..
 import { AppError, ErrorCodes } from '../../common/errors';
 import { normalizePaging, type PageResult } from '../../common/pagination';
 import { ProductsService } from '../products/products.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { parseCsv, toCsv } from './csv';
 import type {
   BatchCreateLicensesDto, CreateLicenseDto, ExportLicensesDto, ImportLicensesDto,
@@ -60,6 +61,7 @@ export class LicensesService {
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     private readonly crypto: CryptoService,
     private readonly products: ProductsService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   private get db() {
@@ -191,7 +193,18 @@ export class LicensesService {
       actorLabel: actor.email ?? null,
       message: '创建授权（来源：' + values.source + '）',
     });
-    return { license: await this.toView(row.id), key: rawKey, keyFormatted: formatLicenseKey(rawKey) };
+    const view = await this.toView(row.id);
+    await this.webhooks.emit('license.created', {
+      licenseId: row.id,
+      keyMasked: view.keyMasked,
+      product: view.productName,
+      plan: view.planCode,
+      customerEmail: view.customerEmail,
+      expiresAt: view.expiresAt ? view.expiresAt.toISOString() : null,
+      source: view.source,
+    }).catch(() => undefined);
+
+    return { license: view, key: rawKey, keyFormatted: formatLicenseKey(rawKey) };
   }
 
   /** 批量发码：分块插入，返回明文列表（仅此一次）。 */
@@ -434,6 +447,15 @@ export class LicensesService {
       message: reason ?? null,
       payload: { from: current.status, to: next },
     });
+    if (action === 'revoke' || action === 'ban') {
+      await this.webhooks.emit('license.revoked', {
+        licenseId: id,
+        keyMasked: current.keyMasked,
+        from: current.status,
+        to: next,
+        reason: reason ?? null,
+      }).catch(() => undefined);
+    }
     return this.get(id);
   }
 
@@ -454,6 +476,12 @@ export class LicensesService {
       message: reason ?? '延长 ' + days + ' 天',
       payload: { days, from: current.expiresAt, to: next },
     });
+    await this.webhooks.emit('license.extended', {
+      licenseId: id,
+      keyMasked: current.keyMasked,
+      days,
+      expiresAt: next.toISOString(),
+    }).catch(() => undefined);
     return this.get(id);
   }
 

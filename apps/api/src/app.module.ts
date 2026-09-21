@@ -16,6 +16,8 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { PortalModule } from './modules/portal/portal.module';
 import { RedeemModule } from './modules/redeem/redeem.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { TasksModule } from './modules/tasks/tasks.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuditController } from './modules/audit/audit.controller';
 import { AuthModule } from './modules/auth/auth.module';
@@ -37,6 +39,8 @@ import { HealthModule } from './modules/health/health.module';
     ActivationModule,
     SettingsModule,
     NotificationsModule,
+    WebhooksModule,
+    TasksModule,
     CustomersModule,
     RedeemModule,
     OrdersModule,

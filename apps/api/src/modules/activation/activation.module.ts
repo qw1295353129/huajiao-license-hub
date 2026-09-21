@@ -6,6 +6,7 @@ import { ActivationController } from './activation.controller';
 import { AdminActivationController } from './admin-activation.controller';
 import { ActivationService } from './activation.service';
 import { LicenseSignerService } from './license-signer.service';
+import { SigningKeysController } from './signing-keys.controller';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { LicenseSignerService } from './license-signer.service';
       }),
     }),
   ],
-  controllers: [ActivationController, AdminActivationController],
+  controllers: [ActivationController, AdminActivationController, SigningKeysController],
   providers: [ActivationService, LicenseSignerService],
   exports: [ActivationService, LicenseSignerService],
 })

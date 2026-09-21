@@ -14,6 +14,7 @@ import { LicensesService } from '../licenses/licenses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProductsService } from '../products/products.service';
 import { SettingsService } from '../settings/settings.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import type { CreateOrderDto, ListOrdersDto, MarkPaidDto, RefundOrderDto } from './dto';
 
 export interface CallbackResult {
@@ -35,6 +36,7 @@ export class OrdersService {
     private readonly licenses: LicensesService,
     private readonly mail: NotificationsService,
     private readonly settings: SettingsService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   private get db() {
@@ -240,6 +242,16 @@ export class OrdersService {
     }
 
     const issued = await this.issueMissingLicenses(orderId);
+    if (!alreadyPaid) {
+      await this.webhooks.emit('order.paid', {
+        orderId,
+        orderNo: order.orderNo,
+        email: order.email,
+        totalCents: order.totalCents,
+        currency: order.currency,
+        licenseCount: issued.length,
+      }).catch(() => undefined);
+    }
     return { order: await this.detail(orderId), licenses: issued, alreadyPaid };
   }
 
@@ -318,6 +330,13 @@ export class OrdersService {
         );
       }
     }
+    await this.webhooks.emit('order.refunded', {
+      orderId,
+      orderNo: order.orderNo,
+      email: order.email,
+      totalCents: order.totalCents,
+      revokedLicenses: revoked,
+    }).catch(() => undefined);
     return { ...(await this.detail(orderId)), revokedLicenses: revoked };
   }
 

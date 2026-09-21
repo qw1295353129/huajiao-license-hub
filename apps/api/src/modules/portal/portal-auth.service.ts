@@ -11,6 +11,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { CustomersService } from '../customers/customers.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { TokenService } from '../auth/token.service';
 import type { PortalLoginDto, PortalRegisterDto } from './dto';
 
@@ -32,6 +33,7 @@ export class PortalAuthService {
     private readonly settings: SettingsService,
     private readonly mail: NotificationsService,
     private readonly audit: AuditService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   private get db() {
@@ -84,6 +86,13 @@ export class PortalAuthService {
       ip: meta.ip ?? null,
       diff: { after: { email, claimedLicenses: claimed } },
     });
+
+    await this.webhooks.emit('customer.created', {
+      customerId: row.id,
+      email: row.email,
+      name: row.name,
+      claimedLicenses: claimed,
+    }).catch(() => undefined);
 
     const tokens = await this.tokens.issueForUser(
       { id: row.id, email: row.email, name: row.name, audience: 'customer' },
