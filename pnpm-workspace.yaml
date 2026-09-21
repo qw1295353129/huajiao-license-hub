@@ -1,0 +1,17 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 10+ 默认禁止依赖执行安装脚本。以下脚本是必需的（原生二进制），其余一律禁止。
+allowBuilds:
+  '@parcel/watcher': false
+  '@scarf/scarf': false
+  '@swc/core': true
+  esbuild: true
+  unrs-resolver: true
+
+# pnpm 12 的供应链保护：这些刚发布的版本显式放行
+minimumReleaseAgeExclude:
+  - '@nestjs/common@12.0.4'
+  - '@nestjs/platform-fastify@12.0.4'
+  - '@nestjs/terminus@12.1.0'

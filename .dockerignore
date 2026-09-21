@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/dist-test
+**/.data
+**/coverage
+**/.turbo
+**/.vite
+**/*.log
+.git
+.gitignore
+.DS_Store
+deploy/backups
+docs
+README.md

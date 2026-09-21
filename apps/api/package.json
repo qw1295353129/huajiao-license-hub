@@ -1,0 +1,56 @@
+{
+  "name": "@license-hub/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "test": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 \"dist-test/src/**/*.spec.js\"",
+    "test:e2e": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 \"dist-test/test/**/*.e2e-spec.js\"",
+    "test:all": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 \"dist-test/src/**/*.spec.js\" \"dist-test/test/**/*.e2e-spec.js\"",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate-cli.ts",
+    "db:seed": "tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.4",
+    "@license-hub/shared": "workspace:*",
+    "@nestjs/common": "^12.0.4",
+    "@nestjs/config": "^12.0.0",
+    "@nestjs/core": "^12.0.3",
+    "@nestjs/jwt": "^12.0.2",
+    "@nestjs/platform-fastify": "^12.0.4",
+    "@nestjs/schedule": "^12.0.2",
+    "@nestjs/swagger": "^12.0.1",
+    "@nestjs/terminus": "^12.1.0",
+    "@nestjs/throttler": "^6.7.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "dotenv": "^18.0.1",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.12.5",
+    "nodemailer": "^10.0.10",
+    "pg": "^8.23.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@nestjs/cli": "^12.0.3",
+    "@nestjs/schematics": "^12.0.3",
+    "@nestjs/testing": "^12.0.3",
+    "@types/node": "^22.10.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "drizzle-kit": "^0.31.10",
+    "supertest": "^7.2.2",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

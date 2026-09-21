@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* 品牌色：授权系统的"凭证感"——靛蓝 + 青绿 */
+  --color-brand-50: oklch(0.97 0.02 275);
+  --color-brand-100: oklch(0.94 0.04 275);
+  --color-brand-200: oklch(0.89 0.07 275);
+  --color-brand-300: oklch(0.82 0.11 275);
+  --color-brand-400: oklch(0.72 0.15 275);
+  --color-brand-500: oklch(0.62 0.19 275);
+  --color-brand-600: oklch(0.54 0.20 275);
+  --color-brand-700: oklch(0.46 0.18 275);
+  --color-brand-800: oklch(0.38 0.15 275);
+  --color-brand-900: oklch(0.31 0.12 275);
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background: var(--color-neutral-50);
+}
+.dark body { background: var(--color-neutral-950); }
+
+* { scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, currentColor 16%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, currentColor 28%, transparent); background-clip: content-box; }
+
+/* 授权码/序列号等需要逐字符比对的场景 */
+.mono-code {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+@keyframes lh-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.animate-fade-in { animation: lh-fade-in .24s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

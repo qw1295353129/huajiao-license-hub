@@ -1,0 +1,22 @@
+{
+  "name": "license-hub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LicenseHub - 面向个人运营者的软件授权管理系统",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter @license-hub/api dev",
+    "dev:web": "pnpm --filter @license-hub/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @license-hub/api db:generate",
+    "db:migrate": "pnpm --filter @license-hub/api db:migrate",
+    "db:seed": "pnpm --filter @license-hub/api db:seed",
+    "verify": "pnpm typecheck && pnpm build && pnpm test"
+  }
+}

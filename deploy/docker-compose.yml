@@ -1,0 +1,107 @@
+name: licensehub
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-licensehub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-licensehub}
+      TZ: ${TIMEZONE:-Asia/Shanghai}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-licensehub} -d ${POSTGRES_DB:-licensehub}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  # 一次性迁移作业：api 启动前完成建表（api 自身也开了 AUTO_MIGRATE 兜底）
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: licensehub-api:local
+    command: ["node", "dist/db/migrate-cli.js"]
+    environment:
+      <<: &api-env
+        NODE_ENV: production
+        APP_PORT: "3000"
+        APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+        TIMEZONE: ${TIMEZONE:-Asia/Shanghai}
+        DATABASE_DRIVER: postgres
+        DATABASE_URL: postgres://${POSTGRES_USER:-licensehub}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-licensehub}
+        REDIS_URL: redis://redis:6379
+        QUEUE_ENABLED: "true"
+        AUTO_MIGRATE: "false"
+        JWT_SECRET: ${JWT_SECRET:?必须设置 JWT_SECRET}
+        LICENSE_PEPPER: ${LICENSE_PEPPER:?必须设置 LICENSE_PEPPER}
+        DATA_KEY: ${DATA_KEY:?必须设置 DATA_KEY}
+        SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+        BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@licensehub.local}
+        BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?首次部署必须设置初始管理员密码}
+        SMTP_HOST: ${SMTP_HOST:-}
+        SMTP_PORT: ${SMTP_PORT:-465}
+        SMTP_SECURE: ${SMTP_SECURE:-true}
+        SMTP_USER: ${SMTP_USER:-}
+        SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+        SMTP_FROM: ${SMTP_FROM:-LicenseHub <no-reply@example.com>}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal]
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: licensehub-api:local
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+      AUTO_MIGRATE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks: [internal]
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    image: licensehub-web:local
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [internal]
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  internal:
+    driver: bridge
