@@ -14,7 +14,10 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    // 默认 5273 而不是 Vite 惯用的 5173：
+    // 5173 常被其它本地项目占用（本机上就有另一个授权系统跑在那里），
+    // 端口不一致会让人打开错误的站点。需要改端口请设 VITE_DEV_PORT。
+    port: Number(process.env.VITE_DEV_PORT ?? 5273),
     strictPort: false,
     // 允许读取 monorepo 上级目录（共享包源码在 apps/web 之外）
     fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] },

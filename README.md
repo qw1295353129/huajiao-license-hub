@@ -20,13 +20,17 @@
 pnpm install
 pnpm --filter @license-hub/api db:migrate   # 建表（默认使用内置 PGlite，数据落在 apps/api/.data/）
 pnpm --filter @license-hub/api db:seed      # 写入演示数据 + 默认管理员
-pnpm dev                                    # 同时启动 api(3000) 与 web(5173)
+pnpm dev                                    # 同时启动 api(3000) 与 web(5273)
 ~~~
 
 默认管理员：`admin@licensehub.local` / `Admin@12345`（首次启动后请立即修改）。
 
-- 管理后台：http://localhost:5173/admin
-- 用户门户：http://localhost:5173/portal
+> **端口说明**：前端固定用 **5273**，不是 Vite 默认的 5173 —— 5173 经常被其它本地项目占用
+> （本机上是另一个授权系统），端口不一致会导致打开错误的站点、误以为"登录不了"。
+> 需要换端口：前端设 `VITE_DEV_PORT`，后端同步改 `APP_ORIGIN`。
+
+- 管理后台：http://localhost:5273/admin
+- 用户门户：http://localhost:5273/portal
 - 接口文档：http://localhost:3000/docs
 - 健康检查：http://localhost:3000/api/health
 

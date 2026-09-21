@@ -87,7 +87,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     env: nodeEnv,
     isProd,
     port: Number(env.APP_PORT ?? 3000),
-    appOrigin: env.APP_ORIGIN ?? 'http://localhost:5173',
+    appOrigin: env.APP_ORIGIN ?? 'http://localhost:5273',
     timezone: env.TIMEZONE ?? 'Asia/Shanghai',
     swaggerEnabled: (env.SWAGGER_ENABLED ?? (isProd ? 'false' : 'true')) === 'true',
     logLevel: env.LOG_LEVEL ?? 'info',

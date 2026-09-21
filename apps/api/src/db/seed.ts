@@ -108,7 +108,7 @@ async function main(): Promise<void> {
       console.log('[seed] 示例 API Key 已存在（明文不可再查，如需请到后台吊销后重建）');
     }
 
-    console.log('[seed] 完成。下一步：pnpm dev 启动前后端，浏览器打开 http://localhost:5173');
+    console.log('[seed] 完成。下一步：pnpm dev 启动前后端，浏览器打开 http://localhost:5273');
   } finally {
     await handle.close();
   }
