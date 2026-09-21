@@ -71,6 +71,8 @@ export const WEBHOOK_EVENTS = [
   'device.bound',
   'device.unbound',
   'device.blacklisted',
+  'domain.bound',
+  'domain.unbound',
   'order.paid',
   'order.refunded',
   'customer.created',

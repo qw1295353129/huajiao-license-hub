@@ -15,6 +15,9 @@ export interface LicenseFile {
   features: string[];
   maxDevices: number;
   deviceFingerprint: string | null;
+  /** 域名授权：本次授权文件绑定的站点域名（设备授权时为 null） */
+  domain?: string | null;
+  maxDomains?: number;
   offlineGraceDays: number;
   remainingUsages: number | null;
   nonce: string;
@@ -35,6 +38,11 @@ export interface Entitlements {
   features?: string[];
   maxDevices?: number;
   activeDevices?: number;
+  /** 已绑定的域名数量 */
+  domainCount?: number;
+  maxDomains?: number;
+  /** 本次校验对应的域名 */
+  domain?: string | null;
   remainingUsages?: number | null;
   heartbeatIntervalHours?: number;
   offlineGraceDays?: number;

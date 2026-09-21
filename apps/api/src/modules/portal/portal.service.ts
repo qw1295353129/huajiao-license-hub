@@ -3,7 +3,7 @@ import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 import {
-  customers, devices, licenseActivations, licenses, orderItems, orders, plans,
+  customers, devices, licenseActivations, licenseDomains, licenses, orderItems, orders, plans,
   productReleases, products,
 } from '../../db/schema';
 import { AppError, ErrorCodes } from '../../common/errors';
@@ -11,6 +11,7 @@ import { normalizePaging } from '../../common/pagination';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RedeemService } from '../redeem/redeem.service';
 import { SettingsService } from '../settings/settings.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
 export class PortalService {
@@ -19,6 +20,7 @@ export class PortalService {
     private readonly settings: SettingsService,
     private readonly redeemService: RedeemService,
     private readonly mail: NotificationsService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   private get db() {
@@ -73,6 +75,8 @@ export class PortalService {
       licenseType: plans.licenseType,
       maxDevices: licenses.maxDevices,
       activationCount: licenses.activationCount,
+      maxDomains: licenses.maxDomains,
+      domainCount: licenses.domainCount,
       expiresAt: licenses.expiresAt,
       validFrom: licenses.validFrom,
       featureKeys: licenses.featureKeys,
@@ -118,6 +122,17 @@ export class PortalService {
       .where(eq(licenseActivations.licenseId, licenseId))
       .orderBy(desc(licenseActivations.lastSeenAt));
 
+    const domainRows = await this.db.select({
+      id: licenseDomains.id,
+      domain: licenseDomains.domain,
+      status: licenseDomains.status,
+      environment: licenseDomains.environment,
+      activatedAt: licenseDomains.activatedAt,
+      lastSeenAt: licenseDomains.lastSeenAt,
+    }).from(licenseDomains)
+      .where(eq(licenseDomains.licenseId, licenseId))
+      .orderBy(desc(licenseDomains.lastSeenAt));
+
     return {
       id: license.id,
       keyMasked: license.keyMasked,
@@ -127,11 +142,14 @@ export class PortalService {
       planName: plan?.name ?? '',
       licenseType: plan?.licenseType ?? 'subscription',
       maxDevices: license.maxDevices,
+      maxDomains: license.maxDomains,
+      domainCount: license.domainCount,
       expiresAt: license.expiresAt,
       validFrom: license.validFrom,
       featureKeys: license.featureKeys,
       activationCount: license.activationCount,
       devices: deviceRows,
+      domains: domainRows,
     };
   }
 
@@ -204,6 +222,40 @@ export class PortalService {
       maxDevices: license.maxDevices,
       remainingUnbinds: limit > 0 ? Math.max(0, limit - (inWindow ? used + 1 : 1)) : null,
     };
+  }
+
+  /**
+   * 门户自助解绑域名（换站点时用）。
+   * 不占用设备解绑配额：域名解绑不会让用户获得超出 maxDomains 的额度，风险有限。
+   */
+  async unbindDomain(customerId: string, licenseId: string, domainId: string) {
+    const license = await this.requireOwnLicense(customerId, licenseId);
+    const [binding] = await this.db.select().from(licenseDomains)
+      .where(and(
+        eq(licenseDomains.id, domainId),
+        eq(licenseDomains.licenseId, licenseId),
+        eq(licenseDomains.status, 'active'),
+      ))
+      .limit(1);
+    if (!binding) throw AppError.notFound('该域名未处于绑定状态');
+
+    await this.db.update(licenseDomains)
+      .set({ status: 'deactivated', deactivatedAt: new Date(), unbindReason: 'customer_self_service' })
+      .where(eq(licenseDomains.id, domainId));
+
+    const [activeRow] = await this.db.select({ value: count() }).from(licenseDomains)
+      .where(and(eq(licenseDomains.licenseId, licenseId), eq(licenseDomains.status, 'active')));
+    const domainCount = Number(activeRow?.value ?? 0);
+    await this.db.update(licenses).set({ domainCount, updatedAt: new Date() }).where(eq(licenses.id, licenseId));
+
+    await this.webhooks.emit('domain.unbound', {
+      licenseId,
+      domain: binding.domain,
+      reason: 'customer_self_service',
+      domainCount,
+    }).catch(() => undefined);
+
+    return { ok: true, domain: binding.domain, domainCount, maxDomains: license.maxDomains };
   }
 
   /* ------------------------------------------------ 我的订单 */

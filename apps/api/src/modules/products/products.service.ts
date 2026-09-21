@@ -170,6 +170,8 @@ export class ProductsService {
       requireDeviceApproval: dto.requireDeviceApproval ?? false,
       featureKeys: dto.featureKeys ?? [],
       maxUsages: dto.maxUsages ?? null,
+      maxDomains: dto.maxDomains ?? 0,
+      allowSubdomains: dto.allowSubdomains ?? true,
       priceCents: dto.priceCents ?? 0,
       currency: dto.currency ?? 'CNY',
     }).returning();
@@ -182,7 +184,7 @@ export class ProductsService {
     for (const key of [
       'name', 'description', 'licenseType', 'durationDays', 'maxDevices', 'offlineGraceDays',
       'heartbeatIntervalHours', 'overLimitPolicy', 'requireDeviceApproval', 'featureKeys',
-      'maxUsages', 'priceCents', 'currency', 'status',
+      'maxUsages', 'maxDomains', 'allowSubdomains', 'priceCents', 'currency', 'status',
     ] as const) {
       if (dto[key] !== undefined) patch[key] = dto[key];
     }

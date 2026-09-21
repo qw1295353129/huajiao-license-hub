@@ -7,8 +7,8 @@ import { ActivationService, type CallContext } from './activation.service';
 import { LicenseSignerService } from './license-signer.service';
 import { ProductsService } from '../products/products.service';
 import {
-  ActivateDto, DeactivateDto, EntitlementsQueryDto, OfflineActivateDto, OfflineRequestDto,
-  TrialDto, VerifyDto, VersionCheckQueryDto,
+  ActivateDomainDto, ActivateDto, DeactivateDomainDto, DeactivateDto, EntitlementsQueryDto,
+  OfflineActivateDto, OfflineRequestDto, TrialDto, VerifyDomainDto, VerifyDto, VersionCheckQueryDto,
 } from './dto';
 
 /**
@@ -73,6 +73,29 @@ export class ActivationController {
       { licenseKey: query.licenseKey, device: { fingerprint: query.fingerprint } },
       { ip },
     );
+  }
+
+  /* ---------------- 域名授权（Web 应用 / 插件 / SaaS 场景） ---------------- */
+
+  @Post('activate-domain')
+  @RequireScopes('license:activate')
+  @ApiOperation({ summary: '域名激活：把站点域名绑定到授权并返回签名授权文件' })
+  activateDomain(@Body() dto: ActivateDomainDto, @ClientIp() ip: string) {
+    return this.activation.activateDomain(dto, { ip });
+  }
+
+  @Post('verify-domain')
+  @RequireScopes('license:verify')
+  @ApiOperation({ summary: '域名心跳校验：服务端每次请求或定时调用' })
+  verifyDomain(@Body() dto: VerifyDomainDto, @ClientIp() ip: string) {
+    return this.activation.verifyDomain(dto, { ip });
+  }
+
+  @Post('deactivate-domain')
+  @RequireScopes('license:deactivate')
+  @ApiOperation({ summary: '域名解绑：释放一个域名额度' })
+  deactivateDomain(@Body() dto: DeactivateDomainDto, @ClientIp() ip: string) {
+    return this.activation.deactivateDomain(dto, { ip });
   }
 
   @Post('trial')

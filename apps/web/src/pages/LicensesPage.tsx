@@ -4,9 +4,9 @@ import {
   Button, Chip, Dropdown, Input, Label, ListBox, Modal, Select, Switch, TextArea, TextField, toast,
 } from '@heroui/react';
 import type { Key } from '@heroui/react';
-import { Copy, Download, Eye, KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Copy, Download, Eye, Globe, KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
-import type { LicenseDetail, LicenseRow, LicenseStats, Paginated, Plan, ProductRow } from '@/lib/types';
+import type { LicenseDetail, LicenseDomain, LicenseRow, LicenseStats, Paginated, Plan, ProductRow } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatCard, StatusChip, Tag } from '@/components/common/ui';
 import { daysLeft, formatDateTime, fromNow } from '@/lib/format';
@@ -109,6 +109,15 @@ export function LicensesPage() {
       ),
     },
     {
+      id: 'domains', label: '域名', align: 'right',
+      render: (row) => (row.maxDomains > 0 ? (
+        <span className="tabular-nums text-[12px]">
+          {row.domainCount}
+          <span className="opacity-45"> / {row.maxDomains}</span>
+        </span>
+      ) : <span className="text-[11px] opacity-35">—</span>),
+    },
+    {
       id: 'expires', label: '到期', align: 'right',
       render: (row) => {
         if (!row.expiresAt) return <Tag color="accent">永久</Tag>;
@@ -146,6 +155,9 @@ export function LicensesPage() {
                 </Dropdown.Item>
                 <Dropdown.Item id="reissue" onAction={() => void reissue(row.id, refresh)}>
                   <KeyRound size={13} /> 换发新授权码
+                </Dropdown.Item>
+                <Dropdown.Item id="reset-domains" onAction={() => void resetDomains(row.id, refresh)}>
+                  <Globe size={13} /> 清空域名绑定
                 </Dropdown.Item>
                 <Dropdown.Item
                   id="suspend"
@@ -318,6 +330,17 @@ async function resetDevices(id: string, refresh: () => void) {
   try {
     const res = await api.post<{ released: number }>('/api/admin/licenses/' + id + '/reset-devices', {});
     toast.success('已释放 ' + res.released + ' 台设备');
+    refresh();
+  } catch (error) {
+    toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+  }
+}
+
+async function resetDomains(id: string, refresh: () => void) {
+  if (!window.confirm('清空该授权的全部域名绑定？相关站点需要重新激活。')) return;
+  try {
+    const res = await api.post<{ released: number }>('/api/admin/licenses/' + id + '/reset-domains', {});
+    toast.success('已释放 ' + res.released + ' 个域名');
     refresh();
   } catch (error) {
     toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
@@ -583,6 +606,12 @@ function LicenseDetailModal({ id, onClose, onChanged }: { id: string | null; onC
     enabled: Boolean(id),
   });
 
+  const domains = useQuery({
+    queryKey: ['license-domains', id],
+    queryFn: () => api.get<LicenseDomain[]>('/api/admin/licenses/' + id + '/domains'),
+    enabled: Boolean(id),
+  });
+
   return (
     <Modal isOpen={Boolean(id)} onOpenChange={(open) => { if (!open) onClose(); }}>
       <Modal.Backdrop isDismissable variant="blur">
@@ -634,6 +663,54 @@ function LicenseDetailModal({ id, onClose, onChanged }: { id: string | null; onC
                       <RefreshCw size={14} /> 延长 30 天
                     </Button>
                   </div>
+
+                  {detail.data.maxDomains > 0 ? (
+                    <section>
+                      <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+                        <Globe size={14} /> 已绑定域名
+                        <span className="text-xs font-normal opacity-50">
+                          {detail.data.domainCount} / {detail.data.maxDomains}
+                          {detail.data.allowSubdomains ? ' · 含子域' : ' · 不含子域'}
+                        </span>
+                      </h3>
+                      {domains.isLoading ? <p className="text-xs opacity-50">加载中…</p> : null}
+                      {(domains.data ?? []).filter((row) => row.status === 'active').length === 0 ? (
+                        <p className="text-xs opacity-50">还没有绑定域名（客户端调用 /api/v1/activate-domain 后会出现在这里）</p>
+                      ) : (
+                        <ul className="flex flex-col gap-2">
+                          {(domains.data ?? []).filter((row) => row.status === 'active').map((row) => (
+                            <li key={row.id} className="flex items-center justify-between gap-2 rounded-lg border border-black/8 p-2.5 text-xs dark:border-white/10">
+                              <div className="min-w-0">
+                                <p className="mono-code truncate">{row.domain}</p>
+                                <p className="opacity-45">
+                                  {row.environment ?? 'production'} · 最近校验 {fromNow(row.lastSeenAt)}
+                                  {row.lastIp ? ' · ' + row.lastIp : ''}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="danger-soft"
+                                onPress={async () => {
+                                  if (!window.confirm('解绑域名 ' + row.domain + '？该站点将立即失效。')) return;
+                                  try {
+                                    await api.delete('/api/admin/domains/' + row.id);
+                                    toast.success('已解绑 ' + row.domain);
+                                    void domains.refetch();
+                                    void detail.refetch();
+                                    onChanged();
+                                  } catch (error) {
+                                    toast.danger('解绑失败', { description: error instanceof Error ? error.message : '' });
+                                  }
+                                }}
+                              >
+                                解绑
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  ) : null}
 
                   <section>
                     <h3 className="mb-2 text-sm font-medium">生命周期事件</h3>

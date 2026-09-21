@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { and, count, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm';
+import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 import { licenseEvents, licenses, products, redeemCodes, verificationLogs, webhookDeliveries } from '../../db/schema';
@@ -26,6 +27,7 @@ export class TasksService {
 
   constructor(
     @Inject(DB) private readonly handle: DatabaseHandle,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     private readonly mail: NotificationsService,
     private readonly settings: SettingsService,
     private readonly tokens: TokenService,
@@ -97,8 +99,12 @@ export class TasksService {
     let sent = 0;
     let skipped = 0;
 
+    // ⚠️ 日期比较必须按「站点时区」而不是数据库会话时区：
+    // 否则 TIMEZONE=Asia/Shanghai 的运营者在 UTC 数据库上会算错一天（跨零点时尤其明显）。
+    const tz = this.config.timezone;
+
     for (const days of daysList) {
-      // 到期日正好是「今天 + days」天的授权
+      // 到期日正好是「站点时区的今天 + days」天的授权
       const rows = await this.db.select({
         id: licenses.id,
         keyMasked: licenses.keyMasked,
@@ -111,7 +117,8 @@ export class TasksService {
           isNotNull(licenses.expiresAt),
           inArray(licenses.status, ['active', 'issued']),
           isNotNull(licenses.customerEmail),
-          sql`${licenses.expiresAt}::date = current_date + make_interval(days => ${days})`,
+          sql`(${licenses.expiresAt} at time zone ${tz})::date
+                = (now() at time zone ${tz})::date + make_interval(days => ${days})`,
         ));
 
       for (const row of rows) {

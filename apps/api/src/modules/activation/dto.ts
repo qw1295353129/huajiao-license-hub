@@ -114,3 +114,47 @@ export class ListActivationsDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number;
   @IsOptional() @IsIn(['active', 'deactivated', 'blocked', 'pending']) status?: 'active' | 'deactivated' | 'blocked' | 'pending';
 }
+/* ------------------------------------------------ 域名授权 */
+
+export class ActivateDomainDto {
+  @IsString() @MinLength(8) @MaxLength(40)
+  licenseKey!: string;
+
+  /** 站点域名，支持带协议/端口/路径的原始输入，服务端会归一化 */
+  @IsString() @MinLength(1) @MaxLength(300)
+  domain!: string;
+
+  @IsOptional() @IsString() @MaxLength(60)
+  product?: string;
+
+  @IsOptional() @IsIn(['production', 'staging', 'development'])
+  environment?: 'production' | 'staging' | 'development';
+
+  @IsOptional() @IsString() @MaxLength(300)
+  userAgent?: string;
+}
+
+export class VerifyDomainDto {
+  @IsOptional() @IsString() @MaxLength(40)
+  licenseKey?: string;
+
+  @IsOptional() @IsString() @MaxLength(2048)
+  accessToken?: string;
+
+  @IsString() @MinLength(1) @MaxLength(300)
+  domain!: string;
+
+  @IsOptional() @IsString() @MaxLength(300)
+  userAgent?: string;
+}
+
+export class DeactivateDomainDto {
+  @IsString() @MinLength(8) @MaxLength(40)
+  licenseKey!: string;
+
+  @IsString() @MinLength(1) @MaxLength(300)
+  domain!: string;
+
+  @IsOptional() @IsString() @MaxLength(200)
+  reason?: string;
+}

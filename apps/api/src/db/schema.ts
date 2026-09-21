@@ -141,6 +141,10 @@ export const plans = pgTable('plans', {
   requireDeviceApproval: boolean('require_device_approval').notNull().default(false),
   featureKeys: jsonb('feature_keys').$type<string[]>().notNull().default([]),
   maxUsages: integer('max_usages'),
+  /** 域名授权额度：0 表示关闭域名授权（只允许设备绑定） */
+  maxDomains: integer('max_domains').notNull().default(0),
+  /** 授权 example.com 时是否覆盖 *.example.com */
+  allowSubdomains: boolean('allow_subdomains').notNull().default(true),
   priceCents: integer('price_cents').notNull().default(0),
   currency: text('currency').notNull().default('CNY'),
   status: text('status').$type<PlanStatus>().notNull().default('active'),
@@ -167,6 +171,9 @@ export const licenses = pgTable('licenses', {
   featureKeys: jsonb('feature_keys').$type<string[]>().notNull().default([]),
   maxUsages: integer('max_usages'),
   remainingUsages: integer('remaining_usages'),
+  maxDomains: integer('max_domains').notNull().default(0),
+  allowSubdomains: boolean('allow_subdomains').notNull().default(true),
+  domainCount: integer('domain_count').notNull().default(0),
   source: text('source').$type<LicenseSource>().notNull().default('manual'),
   batchId: uuid('batch_id'),
   orderId: uuid('order_id'),
@@ -226,6 +233,35 @@ export const licenseActivations = pgTable('license_activations', {
     .where(sql`status = 'active'`),
   index('license_activations_license_idx').on(t.licenseId, t.status),
   index('license_activations_device_idx').on(t.deviceId),
+]);
+
+/**
+ * 域名授权绑定：把授权绑定到具体站点域名（Web 应用 / 插件 / SaaS 场景）。
+ * domain 存归一化后的主机名（小写、去 www、IDN 转 punycode），domainRaw 保留用户原始输入便于客服核对。
+ */
+export const licenseDomains = pgTable('license_domains', {
+  id: id(),
+  licenseId: uuid('license_id').notNull().references(() => licenses.id, { onDelete: 'cascade' }),
+  domain: text('domain').notNull(),
+  domainRaw: text('domain_raw'),
+  status: text('status').$type<ActivationStatus>().notNull().default('active'),
+  /** 环境标记：production / staging / development，便于同一授权区分测试站 */
+  environment: text('environment').$type<'production' | 'staging' | 'development'>().notNull().default('production'),
+  /** 服务端集成时记录的最近一次校验来源 IP 与 UA */
+  lastIp: text('last_ip'),
+  userAgent: text('user_agent'),
+  activatedAt: timestamp('activated_at', { withTimezone: true }).defaultNow().notNull(),
+  deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  unbindReason: text('unbind_reason'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: createdAt(),
+}, (t) => [
+  uniqueIndex('license_domains_active_key')
+    .on(t.licenseId, t.domain)
+    .where(sql`status = 'active'`),
+  index('license_domains_license_idx').on(t.licenseId, t.status),
+  index('license_domains_domain_idx').on(t.domain),
 ]);
 
 export const licenseEvents = pgTable('license_events', {
@@ -480,7 +516,7 @@ export const offlineRequests = pgTable('offline_requests', {
 export const schema = {
   admins, sessions, customers, authTokens,
   products, productFeatures, productReleases, plans,
-  licenses, devices, licenseActivations, licenseEvents, verificationLogs, trials,
+  licenses, devices, licenseActivations, licenseDomains, licenseEvents, verificationLogs, trials,
   orders, orderItems, paymentEvents, coupons, redeemBatches, redeemCodes,
   apiKeys, webhookEndpoints, webhookDeliveries, auditLogs, emailLogs, signingKeys, settings,
   offlineRequests,

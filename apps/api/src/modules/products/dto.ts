@@ -92,6 +92,13 @@ export class CreatePlanDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0)
   maxUsages?: number | null;
 
+  /** 域名授权额度：0 = 关闭域名授权 */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(10000)
+  maxDomains?: number;
+
+  @IsOptional() @IsBoolean()
+  allowSubdomains?: boolean;
+
   @IsOptional() @Type(() => Number) @IsInt() @Min(0)
   priceCents?: number;
 

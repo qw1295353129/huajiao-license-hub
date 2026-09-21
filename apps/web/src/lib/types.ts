@@ -40,6 +40,9 @@ export interface Plan {
   requireDeviceApproval: boolean;
   featureKeys: string[];
   maxUsages: number | null;
+  /** 域名授权额度：0 = 关闭 */
+  maxDomains: number;
+  allowSubdomains: boolean;
   priceCents: number;
   currency: string;
   status: PlanStatus;
@@ -75,10 +78,27 @@ export interface LicenseRow {
   expiresAt: string | null;
   featureKeys: string[];
   remainingUsages: number | null;
+  maxDomains: number;
+  allowSubdomains: boolean;
+  domainCount: number;
   source: LicenseSource;
   notes: string | null;
   lastVerifiedAt: string | null;
   createdAt: string;
+}
+
+export interface LicenseDomain {
+  id: string;
+  licenseId?: string;
+  domain: string;
+  domainRaw?: string | null;
+  status: ActivationStatus;
+  environment?: 'production' | 'staging' | 'development';
+  lastIp?: string | null;
+  activatedAt: string;
+  deactivatedAt?: string | null;
+  lastSeenAt: string;
+  unbindReason?: string | null;
 }
 
 export interface LicenseEvent {

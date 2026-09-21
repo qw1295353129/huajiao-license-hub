@@ -70,15 +70,15 @@ async function main(): Promise<void> {
     const planDefs = [
       {
         code: 'trial-14', name: '14 天试用', licenseType: 'trial' as const,
-        durationDays: 14, maxDevices: 1, featureKeys: ['pro-mode'], priceCents: 0,
+        durationDays: 14, maxDevices: 1, maxDomains: 1, featureKeys: ['pro-mode'], priceCents: 0,
       },
       {
         code: 'pro-yearly', name: '专业版 · 年付', licenseType: 'subscription' as const,
-        durationDays: 365, maxDevices: 3, featureKeys: ['pro-mode', 'export-pdf', 'cloud-sync'], priceCents: 19900,
+        durationDays: 365, maxDevices: 3, maxDomains: 3, featureKeys: ['pro-mode', 'export-pdf', 'cloud-sync'], priceCents: 19900,
       },
       {
         code: 'pro-lifetime', name: '专业版 · 买断', licenseType: 'perpetual' as const,
-        durationDays: null, maxDevices: 3, featureKeys: ['pro-mode', 'export-pdf', 'cloud-sync'], priceCents: 49900,
+        durationDays: null, maxDevices: 3, maxDomains: 3, featureKeys: ['pro-mode', 'export-pdf', 'cloud-sync'], priceCents: 49900,
       },
     ];
     for (const def of planDefs) {

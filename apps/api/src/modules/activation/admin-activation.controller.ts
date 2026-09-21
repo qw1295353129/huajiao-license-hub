@@ -61,6 +61,29 @@ export class AdminActivationController {
     return this.activation.blacklistDevice(params.id, dto.blacklisted, dto.reason, { id: user.id });
   }
 
+  @Get('licenses/:id/domains')
+  @Roles('support')
+  @ApiOperation({ summary: '该授权已绑定的域名列表' })
+  listDomains(@Param() params: IdParamDto) {
+    return this.activation.listDomains(params.id);
+  }
+
+  @Delete('domains/:id')
+  @Roles('admin')
+  @Audit({ action: 'domain.unbind', targetType: 'license_domain' })
+  @ApiOperation({ summary: '强制解绑域名（释放额度）' })
+  unbindDomain(@Param() params: IdParamDto, @Body() dto: ReasonDto, @CurrentUser() user: RequestUser) {
+    return this.activation.unbindDomain(params.id, { id: user.id, email: user.email }, dto.reason);
+  }
+
+  @Post('licenses/:id/reset-domains')
+  @Roles('admin')
+  @Audit({ action: 'license.reset_domains', targetType: 'license' })
+  @ApiOperation({ summary: '清空该授权的全部域名绑定' })
+  resetDomains(@Param() params: IdParamDto, @CurrentUser() user: RequestUser) {
+    return this.activation.resetDomains(params.id, { id: user.id, email: user.email });
+  }
+
   @Post('licenses/:id/offline-response')
   @Roles('admin')
   @Audit({ action: 'license.offline_response', targetType: 'license' })

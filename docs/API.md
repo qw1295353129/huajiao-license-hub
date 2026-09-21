@@ -128,6 +128,29 @@
 | POST | `/offline/activate` | `{requestCode, responseCode}` → `{ licenseFile }` |
 | GET | `/version-check` | `?product=&channel=` → 最新版本与下载地址 |
 
+### 域名授权
+
+Web 应用 / 插件 / SaaS 场景把授权绑定到**域名**而不是设备：
+
+~~~bash
+# 激活（域名会归一化：去协议/端口/路径、小写、去 www、IDN 转 punycode）
+curl -X POST https://lic.example.com/api/v1/activate-domain \
+  -H "X-Api-Key: lh_live_xxx" -H "Content-Type: application/json" \
+  -d '{"licenseKey":"XXXX-XXXX-XXXX-XXXX","domain":"https://www.Shop.Example.com:8443/admin"}'
+# → {"domain":"shop.example.com","entitlements":{"domainCount":1,"maxDomains":2},...}
+
+# 心跳（服务端每次请求或每日定时调用）
+curl -X POST .../api/v1/verify-domain -d '{"licenseKey":"...","domain":"shop.example.com"}'
+~~~
+
+规则：
+
+- 域名额度由策略/授权的 §maxDomains§ 决定，**0 表示关闭域名授权**；
+- §allowSubdomains=true§ 时，授权 §example.com§ 覆盖 §*.example.com§，但**不覆盖** §notexample.com§；
+- 同一域名的不同写法（大小写、www、端口、路径）视为同一域名，重复激活幂等、不重复占额度；
+- 域名授权与设备授权**互不占用额度**，同一张授权可同时用于桌面端与网站；
+- 事件：§domain.bound§ / §domain.unbound§ 会推送到 Webhook。
+
 ### 授权文件（licenseFile）格式
 
 ~~~json

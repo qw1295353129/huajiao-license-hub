@@ -53,6 +53,16 @@
 - **证据**：portal e2e 14 项全绿（含回调重放去重、卡密并发抢占、越权 404、令牌一次性）；
   实测真实链路：注册 → 建单支付 → 自动发码 2 条 → 门户可见 → 生成 5 张卡密；门户 4 页 + 管理端 6 页 0 console 错误
 
+## M5.5 · 域名授权 ✅
+- [x] 归一化与匹配规则（去协议/端口/路径/www、IDN→punycode、子域覆盖）——共享包 + 单测 8 项
+- [x] §license_domains§ 表 + §plans/licenses.maxDomains / allowSubdomains§（迁移 0001）
+- [x] 客户端 API：§activate-domain§ / §verify-domain§ / §deactivate-domain§
+- [x] 额度控制、幂等重复激活、与设备授权互不占额、§domain.bound/unbound§ Webhook
+- [x] 管理端：域名列表、强制解绑、清空；门户：域名可见 + 自助解绑
+- [x] SDK 域名方法 + 服务端取域名工具 §currentDomainFromHeaders§
+- [x] 修复：到期提醒按**站点时区**比较日期（原先用数据库会话时区，跨零点会算错一天）
+- **证据**：domain e2e 12 项全绿；验收脚本新增 7 项域名断言，总 49/49
+
 ## M6 · 运营与集成 ✅
 - [x] 看板聚合接口（KPI + 30 天趋势 + 最近操作 + 即将到期）
 - [x] 邮件通知：模板化（欢迎/发码/订单/到期/重置/解绑/兑换）、未配置 SMTP 时只记日志

@@ -10,6 +10,7 @@
 | 前端 | React 19 + TypeScript + Vite 8 + React Router 7 + TanStack Query |
 | UI | HeroUI v3 + Tailwind CSS v4 + Recharts + lucide-react |
 | 后端 | NestJS 12（Fastify 适配器）+ Drizzle ORM |
+| 授权维度 | **设备授权**（硬件指纹）与 **域名授权**（站点域名，支持子域覆盖）可并存 |
 | 数据库 | PostgreSQL 17（本地开发/测试可用内置 PGlite，免安装） |
 | 队列/缓存 | Redis 7 + BullMQ（未配置 Redis 时自动降级为进程内实现） |
 | 部署 | Docker Compose（postgres + redis + api + web/nginx + 迁移作业） |
@@ -75,6 +76,19 @@ license-hub/
 ~~~bash
 # 1) 后台创建 API Key（只显示一次明文），2) 后台创建一条授权，3) 跑演示
 node sdk/demo.mjs <API_KEY> <LICENSE_KEY> http://localhost:3000
+# 演示会依次跑：设备激活 → 本地验签 → 心跳 → 解绑 → 域名激活 → 子域覆盖 → 未授权域名拒绝
+~~~
+
+域名授权（Web 应用/插件场景）：
+
+~~~ts
+// 服务端集成：把当前站点域名绑定到授权
+const res = await client.activateDomain(licenseKey, currentDomainFromHeaders(req.headers));
+if (res.ok) {
+  // 之后每次请求（带缓存）或每日定时校验
+  const check = await client.verifyDomain({ accessToken, domain: currentDomainFromHeaders(req.headers) });
+  if (!check.ok || !check.valid) return res.status(403).end();
+}
 ~~~
 
 业务代码里只需引入 §sdk/license-client.ts§（零依赖，浏览器 / Node / Electron / Tauri 通用）：

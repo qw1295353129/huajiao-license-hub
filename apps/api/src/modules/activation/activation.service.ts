@@ -2,18 +2,21 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { and, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import type { Entitlements, LicenseFile } from '@license-hub/shared';
-import { formatLicenseKey, normalizeLicenseKey } from '@license-hub/shared';
+import { domainMatches, formatLicenseKey, normalizeDomain, normalizeLicenseKey } from '@license-hub/shared';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { CryptoService } from '../../crypto/crypto.service';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 import {
-  devices, licenseActivations, licenseEvents, licenses, offlineRequests, plans, products, trials, verificationLogs,
+  devices, licenseActivations, licenseDomains, licenseEvents, licenses, offlineRequests, plans, products, trials, verificationLogs,
 } from '../../db/schema';
 import { AppError, ErrorCodes } from '../../common/errors';
 import { LicenseSignerService } from './license-signer.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
-import type { ActivateDto, DeactivateDto, OfflineRequestDto, TrialDto, VerifyDto } from './dto';
+import type {
+  ActivateDomainDto, ActivateDto, DeactivateDomainDto, DeactivateDto, OfflineRequestDto, TrialDto,
+  VerifyDomainDto, VerifyDto,
+} from './dto';
 
 export interface CallContext {
   ip?: string;
@@ -192,10 +195,12 @@ export class ActivationService {
 
   private async buildLicenseFile(
     resolved: ResolvedLicense,
-    deviceFingerprint: string | null,
+    binding: { deviceFingerprint?: string | null; domain?: string | null } | null,
   ): Promise<LicenseFile> {
     const { license, plan, product } = resolved;
     return this.signer.sign({
+      domain: binding?.domain ?? null,
+      maxDomains: license.maxDomains,
       licenseId: license.id,
       product: product.slug,
       plan: plan.code,
@@ -205,7 +210,7 @@ export class ActivationService {
       perpetual: license.expiresAt === null,
       features: license.featureKeys,
       maxDevices: license.maxDevices,
-      deviceFingerprint,
+      deviceFingerprint: binding?.deviceFingerprint ?? null,
       offlineGraceDays: plan.offlineGraceDays,
       remainingUsages: license.remainingUsages,
     });
@@ -372,7 +377,7 @@ export class ActivationService {
     }
 
     const refreshed = { license: { ...license, status: 'active' as const }, plan, product };
-    const licenseFile = await this.buildLicenseFile(refreshed, dto.device.fingerprint);
+    const licenseFile = await this.buildLicenseFile(refreshed, { deviceFingerprint: dto.device.fingerprint });
     const accessToken = await this.signClientToken(license.id, device.id, plan.heartbeatIntervalHours);
 
     return {
@@ -382,6 +387,311 @@ export class ActivationService {
       licenseFile,
       entitlements: this.buildEntitlements(refreshed, activeDevices),
     };
+  }
+
+  /* ------------------------------------------------ 域名授权 */
+
+  /** 统计仍处于 active 的域名绑定数。 */
+  private async countActiveDomains(licenseId: string): Promise<number> {
+    const [row] = await this.db.select({ value: count() }).from(licenseDomains)
+      .where(and(eq(licenseDomains.licenseId, licenseId), eq(licenseDomains.status, 'active')));
+    return Number(row?.value ?? 0);
+  }
+
+  /**
+   * 查找覆盖该域名的绑定记录。
+   * 先精确匹配，再在允许子域时按「父域名」匹配，保证 a.example.com 命中 example.com 的授权。
+   */
+  private async findDomainBinding(licenseId: string, domain: string, allowSubdomains: boolean) {
+    const rows = await this.db.select().from(licenseDomains)
+      .where(and(eq(licenseDomains.licenseId, licenseId), eq(licenseDomains.status, 'active')));
+    for (const row of rows) {
+      if (domainMatches(domain, row.domain, allowSubdomains)) return row;
+    }
+    return null;
+  }
+
+  private buildDomainEntitlements(
+    resolved: ResolvedLicense,
+    domainCount: number,
+    domain: string,
+    override?: { valid: boolean; reason?: Entitlements['reason']; message?: string },
+  ): Entitlements {
+    return {
+      ...this.buildEntitlements(resolved, 0, override),
+      domain,
+      domainCount,
+      maxDomains: resolved.license.maxDomains,
+    };
+  }
+
+  /** 域名激活：把一个站点域名绑定到授权上。 */
+  async activateDomain(dto: ActivateDomainDto, ctx: CallContext) {
+    const parsed = normalizeDomain(dto.domain);
+    if (!parsed.valid) {
+      throw AppError.badRequest(
+        ErrorCodes.VALIDATION_FAILED,
+        '域名格式不正确：' + (dto.domain || '(空)') + '（示例：example.com 或 https://www.example.com）',
+        { reason: parsed.reason },
+      );
+    }
+    const domain = parsed.domain;
+
+    const resolved = await this.resolveByKey(dto.licenseKey);
+    if (!resolved) throw new AppError(ErrorCodes.LICENSE_NOT_FOUND, '授权码不存在', 404);
+    const { license, plan, product } = resolved;
+
+    if (dto.product && dto.product !== product.slug) {
+      throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '授权码不属于产品 ' + dto.product);
+    }
+
+    const invalid = this.validateState(resolved);
+    if (invalid) {
+      throw new AppError(
+        invalid.reason === 'invalid_expired' ? ErrorCodes.LICENSE_EXPIRED : ErrorCodes.LICENSE_REVOKED,
+        invalid.message,
+        410,
+      );
+    }
+
+    if (license.maxDomains <= 0) {
+      throw new AppError(
+        ErrorCodes.DOMAIN_NOT_ALLOWED,
+        '该授权不支持域名授权，请在后台把「域名额度」调大后重试',
+        409,
+        { maxDomains: license.maxDomains, plan: plan.code },
+      );
+    }
+
+    const existing = await this.findDomainBinding(license.id, domain, license.allowSubdomains);
+    if (existing) {
+      // 同一域名重复激活：视为幂等，直接续期令牌
+      await this.db.update(licenseDomains)
+        .set({ lastSeenAt: new Date(), lastIp: ctx.ip ?? existing.lastIp, userAgent: dto.userAgent ?? existing.userAgent })
+        .where(eq(licenseDomains.id, existing.id));
+      const domainCount = await this.countActiveDomains(license.id);
+      await this.touchLicense(license.id, domainCount);
+      const file = await this.buildLicenseFile(resolved, { domain: existing.domain });
+      const token = await this.signClientToken(license.id, existing.id, plan.heartbeatIntervalHours);
+      return {
+        valid: true as const,
+        accessToken: token,
+        expiresIn: Math.min(72, Math.max(6, plan.heartbeatIntervalHours * 3)) * 3600,
+        licenseFile: file,
+        domain: existing.domain,
+        entitlements: this.buildDomainEntitlements(resolved, domainCount, existing.domain),
+        reactivated: true,
+      };
+    }
+
+    const activeCount = await this.countActiveDomains(license.id);
+    if (activeCount >= license.maxDomains) {
+      throw new AppError(
+        ErrorCodes.DOMAIN_LIMIT_REACHED,
+        '域名额度已用完（' + license.maxDomains + ' 个），请先在后台解绑不用的域名',
+        409,
+        { maxDomains: license.maxDomains, domainCount: activeCount },
+      );
+    }
+
+    const [binding] = await this.db.insert(licenseDomains).values({
+      licenseId: license.id,
+      domain,
+      domainRaw: dto.domain,
+      environment: dto.environment ?? 'production',
+      lastIp: ctx.ip ?? null,
+      userAgent: dto.userAgent ?? null,
+    }).returning();
+
+    const domainCount = activeCount + 1;
+    await this.touchLicense(license.id, domainCount);
+    await this.recordEvent({
+      licenseId: license.id,
+      type: 'domain_activated',
+      message: '新域名激活：' + domain + (parsed.isLocal ? '（本地/内网地址）' : ''),
+      payload: { domain, domainRaw: dto.domain, environment: dto.environment ?? 'production' },
+      ip: ctx.ip ?? null,
+    });
+
+    await this.webhooks.emit('domain.bound', {
+      licenseId: license.id,
+      keyMasked: license.keyMasked,
+      domain,
+      environment: dto.environment ?? 'production',
+      domainCount,
+      maxDomains: license.maxDomains,
+    }).catch(() => undefined);
+
+    const file = await this.buildLicenseFile(resolved, { domain });
+    const token = await this.signClientToken(license.id, binding.id, plan.heartbeatIntervalHours);
+    return {
+      valid: true as const,
+      accessToken: token,
+      expiresIn: Math.min(72, Math.max(6, plan.heartbeatIntervalHours * 3)) * 3600,
+      licenseFile: file,
+      domain,
+      entitlements: this.buildDomainEntitlements({ ...resolved, license: { ...license, status: 'active' } }, domainCount, domain),
+      reactivated: false,
+    };
+  }
+
+  /** 域名心跳校验（服务端集成每次请求或定时调用）。 */
+  async verifyDomain(dto: VerifyDomainDto, ctx: CallContext): Promise<Entitlements> {
+    const parsed = normalizeDomain(dto.domain);
+    if (!parsed.valid) {
+      return { valid: false, reason: 'invalid_device', message: '域名格式不正确：' + dto.domain };
+    }
+    const domain = parsed.domain;
+
+    let resolved: ResolvedLicense | null = null;
+    if (dto.accessToken) {
+      try {
+        const payload = await this.jwt.verifyAsync<{ sub: string; dev: string; aud: string }>(dto.accessToken);
+        if (payload.aud !== CLIENT_TOKEN_AUDIENCE) throw new Error('audience mismatch');
+        resolved = await this.resolveById(payload.sub);
+      } catch {
+        resolved = dto.licenseKey ? await this.resolveByKey(dto.licenseKey) : null;
+      }
+    } else if (dto.licenseKey) {
+      resolved = await this.resolveByKey(dto.licenseKey);
+    }
+
+    if (!resolved) {
+      return { valid: false, reason: 'invalid_not_found', message: '授权码不存在或令牌已失效' };
+    }
+
+    const { license } = resolved;
+    const domainCount = await this.countActiveDomains(license.id);
+    const fail = (reason: Entitlements['reason'], message: string): Entitlements =>
+      this.buildDomainEntitlements(resolved as ResolvedLicense, domainCount, domain, { valid: false, reason, message });
+
+    const invalid = this.validateState(resolved);
+    if (invalid) return fail(invalid.reason, invalid.message);
+
+    const binding = await this.findDomainBinding(license.id, domain, license.allowSubdomains);
+    if (!binding) {
+      return fail('invalid_device', '该域名未激活此授权，请先调用 /api/v1/activate-domain');
+    }
+
+    await this.db.update(licenseDomains)
+      .set({ lastSeenAt: new Date(), lastIp: ctx.ip ?? binding.lastIp, userAgent: dto.userAgent ?? binding.userAgent })
+      .where(eq(licenseDomains.id, binding.id));
+    await this.touchLicense(license.id, domainCount);
+
+    return this.buildDomainEntitlements(resolved, domainCount, domain);
+  }
+
+  /** 域名解绑（客户端/服务端主动释放额度）。 */
+  async deactivateDomain(dto: DeactivateDomainDto, ctx: CallContext) {
+    const parsed = normalizeDomain(dto.domain);
+    if (!parsed.valid) throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '域名格式不正确：' + dto.domain);
+
+    const resolved = await this.resolveByKey(dto.licenseKey);
+    if (!resolved) throw new AppError(ErrorCodes.LICENSE_NOT_FOUND, '授权码不存在', 404);
+
+    const binding = await this.findDomainBinding(resolved.license.id, parsed.domain, resolved.license.allowSubdomains);
+    if (!binding) throw new AppError(ErrorCodes.DOMAIN_NOT_BOUND, '该域名未绑定此授权', 404);
+
+    await this.db.update(licenseDomains)
+      .set({ status: 'deactivated', deactivatedAt: new Date(), unbindReason: dto.reason ?? 'client_request' })
+      .where(eq(licenseDomains.id, binding.id));
+
+    const domainCount = await this.countActiveDomains(resolved.license.id);
+    await this.touchLicense(resolved.license.id, domainCount);
+    await this.recordEvent({
+      licenseId: resolved.license.id,
+      type: 'domain_deactivated',
+      message: (dto.reason ?? '客户端解绑域名') + '：' + binding.domain,
+      payload: { domain: binding.domain },
+      ip: ctx.ip ?? null,
+    });
+
+    await this.webhooks.emit('domain.unbound', {
+      licenseId: resolved.license.id,
+      domain: binding.domain,
+      reason: dto.reason ?? 'client_request',
+      domainCount,
+    }).catch(() => undefined);
+
+    return { valid: true, released: 1, domainCount, maxDomains: resolved.license.maxDomains };
+  }
+
+  /** 更新授权上的域名计数与最近校验时间。 */
+  private async touchLicense(licenseId: string, domainCount: number): Promise<void> {
+    await this.db.update(licenses).set({
+      domainCount,
+      status: 'active',
+      lastVerifiedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(licenses.id, licenseId));
+  }
+
+  /** 管理端/门户：列出某授权的域名绑定。 */
+  async listDomains(licenseId: string) {
+    return this.db.select({
+      id: licenseDomains.id,
+      licenseId: licenseDomains.licenseId,
+      domain: licenseDomains.domain,
+      domainRaw: licenseDomains.domainRaw,
+      status: licenseDomains.status,
+      environment: licenseDomains.environment,
+      lastIp: licenseDomains.lastIp,
+      activatedAt: licenseDomains.activatedAt,
+      deactivatedAt: licenseDomains.deactivatedAt,
+      lastSeenAt: licenseDomains.lastSeenAt,
+      unbindReason: licenseDomains.unbindReason,
+    }).from(licenseDomains)
+      .where(eq(licenseDomains.licenseId, licenseId))
+      .orderBy(desc(licenseDomains.lastSeenAt));
+  }
+
+  /** 解绑单个域名绑定（管理端与门户共用）。 */
+  async unbindDomain(domainId: string, actor: { id?: string; email?: string }, reason?: string) {
+    const [binding] = await this.db.select().from(licenseDomains).where(eq(licenseDomains.id, domainId)).limit(1);
+    if (!binding) throw AppError.notFound('域名绑定记录不存在');
+    if (binding.status !== 'active') throw AppError.conflict('该域名未处于绑定状态');
+
+    await this.db.update(licenseDomains)
+      .set({ status: 'deactivated', deactivatedAt: new Date(), unbindReason: reason ?? 'admin_unbind' })
+      .where(eq(licenseDomains.id, domainId));
+
+    const domainCount = await this.countActiveDomains(binding.licenseId);
+    await this.touchLicense(binding.licenseId, domainCount);
+    await this.recordEvent({
+      licenseId: binding.licenseId,
+      type: 'domain_deactivated',
+      actorType: actor.email === 'portal' ? 'customer' : 'admin',
+      actorId: actor.id ?? null,
+      actorLabel: actor.email ?? null,
+      message: (reason ?? '解绑域名') + '：' + binding.domain,
+      payload: { domain: binding.domain },
+    });
+    await this.webhooks.emit('domain.unbound', {
+      licenseId: binding.licenseId,
+      domain: binding.domain,
+      reason: reason ?? 'admin_unbind',
+      domainCount,
+    }).catch(() => undefined);
+    return { ok: true, domainCount, maxDomains: 0 };
+  }
+
+  /** 清空某授权的全部域名绑定。 */
+  async resetDomains(licenseId: string, actor: { id?: string; email?: string }) {
+    const rows = await this.db.update(licenseDomains)
+      .set({ status: 'deactivated', deactivatedAt: new Date(), unbindReason: 'admin_reset' })
+      .where(and(eq(licenseDomains.licenseId, licenseId), eq(licenseDomains.status, 'active')))
+      .returning({ id: licenseDomains.id, domain: licenseDomains.domain });
+    await this.touchLicense(licenseId, 0);
+    await this.recordEvent({
+      licenseId,
+      type: 'domains_reset',
+      actorType: 'admin',
+      actorId: actor.id ?? null,
+      actorLabel: actor.email ?? null,
+      message: '管理员清空域名绑定',
+      payload: { released: rows.length, domains: rows.map((row) => row.domain) },
+    });
+    return { ok: true, released: rows.length };
   }
 
   /* ------------------------------------------------ 心跳校验 */
@@ -664,7 +974,7 @@ export class ActivationService {
     }
 
     const fingerprint = typeof payload.fingerprint === 'string' ? payload.fingerprint : null;
-    const file = await this.buildLicenseFile(resolved, fingerprint);
+    const file = await this.buildLicenseFile(resolved, { deviceFingerprint: fingerprint });
     if (offlineGraceDays !== undefined) file.offlineGraceDays = offlineGraceDays;
 
     await this.db.update(offlineRequests)

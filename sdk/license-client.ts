@@ -53,6 +53,9 @@ export interface LicenseFile {
   features: string[];
   maxDevices: number;
   deviceFingerprint: string | null;
+  /** 域名授权时绑定的站点域名（设备授权为 null/undefined） */
+  domain?: string | null;
+  maxDomains?: number;
   offlineGraceDays: number;
   remainingUsages: number | null;
   nonce: string;
@@ -71,6 +74,10 @@ export interface Entitlements {
   features?: string[];
   maxDevices?: number;
   activeDevices?: number;
+  /** 已绑定域名数 / 域名额度 */
+  domainCount?: number;
+  maxDomains?: number;
+  domain?: string | null;
   remainingUsages?: number | null;
   heartbeatIntervalHours?: number;
   offlineGraceDays?: number;
@@ -224,6 +231,59 @@ export class LicenseClient {
     return this.request('/api/v1/trial', { product: this.options.product, device, ...(email ? { email } : {}) });
   }
 
+  /* ---------------- 域名授权（Web 应用 / 插件 / SaaS） ---------------- */
+
+  /**
+   * 域名激活：把当前站点域名绑定到授权。
+   * @param domain 传 'example.com' 或 'https://www.example.com:8443/path' 都可以，服务端会归一化。
+   */
+  async activateDomain(
+    licenseKey: string,
+    domain: string,
+    options?: { environment?: 'production' | 'staging' | 'development'; userAgent?: string },
+  ): Promise<ClientResult<{ licenseFile: LicenseFile; entitlements: Entitlements; accessToken: string; domain: string; reactivated: boolean }>> {
+    const res = await this.request<{
+      licenseFile: LicenseFile;
+      entitlements: Entitlements;
+      accessToken: string;
+      domain: string;
+      reactivated: boolean;
+    }>('/api/v1/activate-domain', {
+      licenseKey,
+      domain,
+      product: this.options.product,
+      ...(options?.environment ? { environment: options.environment } : {}),
+      ...(options?.userAgent ? { userAgent: options.userAgent } : {}),
+    });
+    if (res.ok) {
+      const key = await this.fetchPublicKey();
+      if (key && !(await verifyLicenseFile(res.licenseFile, key))) {
+        return { ok: false, reason: 'SIGNATURE_INVALID', message: '授权文件验签失败，请勿使用被篡改的文件' };
+      }
+    }
+    return res;
+  }
+
+  /** 域名心跳：建议在服务端每次请求（带缓存）或每日定时调用。 */
+  async verifyDomain(params: {
+    domain: string;
+    licenseKey?: string;
+    accessToken?: string;
+    userAgent?: string;
+  }): Promise<ClientResult<{ valid: boolean } & Entitlements>> {
+    return this.request('/api/v1/verify-domain', {
+      domain: params.domain,
+      ...(params.licenseKey ? { licenseKey: params.licenseKey } : {}),
+      ...(params.accessToken ? { accessToken: params.accessToken } : {}),
+      ...(params.userAgent ? { userAgent: params.userAgent } : {}),
+    });
+  }
+
+  /** 域名解绑：释放一个域名额度。 */
+  async deactivateDomain(licenseKey: string, domain: string, reason?: string): Promise<ClientResult<{ valid: boolean; domainCount: number }>> {
+    return this.request('/api/v1/deactivate-domain', { licenseKey, domain, ...(reason ? { reason } : {}) });
+  }
+
   async requestOffline(device: DeviceInfo, licenseKey?: string): Promise<ClientResult<{ requestCode: string }>> {
     return this.request('/api/v1/offline/request', {
       product: this.options.product,
@@ -254,6 +314,28 @@ export class LicenseClient {
     const daysLeft = Math.ceil((expires - now) / 86_400_000);
     if (now > expires + graceMs) return { valid: false, reason: 'EXPIRED', daysLeft };
     return { valid: true, daysLeft };
+  }
+}
+
+/**
+ * 服务端集成用：从请求头推断当前站点域名（Host / X-Forwarded-Host），并归一化。
+ * 例：Express/Nest 里传 §req.headers§ 即可。
+ */
+export function currentDomainFromHeaders(headers: Record<string, string | string[] | undefined>): string {
+  const raw = headers['x-forwarded-host'] ?? headers.host ?? headers[':authority'];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return normalizeDomainClient(value ?? '');
+}
+
+/** 与服务端一致的域名归一化（去协议/端口/路径/大小写/www，IDN 转 punycode）。 */
+export function normalizeDomainClient(raw: string): string {
+  const input = raw.trim().toLowerCase();
+  if (!input) return '';
+  try {
+    const url = new URL(input.includes('://') ? input : 'http://' + input);
+    return url.hostname.replace(/\.$/, '').replace(/^www\./, '');
+  } catch {
+    return '';
   }
 }
 

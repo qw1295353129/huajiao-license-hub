@@ -233,8 +233,21 @@ describe('Webhook 投递与定时任务（e2e）', () => {
     const license = await request(server).post('/api/admin/licenses').set(admin())
       .send({ productId, planId, customerEmail: 'remind@example.com' });
     const licenseId = license.body.license.id as string;
+
+    // 用「站点时区」推导目标日期，避免测试结果随运行钟点变化（曾因此在 23:43 失败）
+    const dbModule = await import('../src/db/db.module');
+    const drizzle = await import('drizzle-orm');
+    const rawHandle = ctx.app.get(dbModule.DB) as {
+      db: { execute: (query: unknown) => Promise<{ rows?: Array<{ target: string }> }> };
+    };
+    const tz = process.env.TIMEZONE ?? 'Asia/Shanghai';
+    const dateQuery = await rawHandle.db.execute(
+      drizzle.sql`select ((now() at time zone ${tz})::date + interval '7 days')::date::text as target`,
+    );
+    const target = (dateQuery.rows ?? [])[0]?.target as string;
+    assert.ok(target, '应能从数据库取到目标日期');
     await request(server).patch('/api/admin/licenses/' + licenseId).set(admin())
-      .send({ expiresAt: new Date(Date.now() + 7 * 86_400_000 + 3_600_000).toISOString() });
+      .send({ expiresAt: target + 'T04:00:00.000Z' });
 
     const first = await request(server).post('/api/admin/tasks/run').set(admin()).send({ task: 'expiry-reminders' });
     assert.equal(first.status, 201);

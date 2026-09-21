@@ -95,6 +95,34 @@ if (LICENSE_KEY) {
   console.log('（未提供 LICENSE_KEY，跳过激活流程）');
 }
 
-console.log('== 6. 无 Key / 错 Key 的拒绝行为 ==');
+console.log('== 6. 域名授权（Web 应用场景）==');
+if (LICENSE_KEY) {
+  const domainActivate = await call('/api/v1/activate-domain', {
+    licenseKey: LICENSE_KEY,
+    product: 'demo-app',
+    domain: 'https://www.Shop.Example.com:8443/admin',   // 故意写成需要归一化的形式
+  });
+  console.log('   status:', domainActivate.status);
+  if (domainActivate.status === 201) {
+    console.log('   归一化后的域名:', domainActivate.body.domain);
+    console.log('   域名额度:', domainActivate.body.entitlements.domainCount + '/' + domainActivate.body.entitlements.maxDomains);
+    console.log('   授权文件里的 domain:', domainActivate.body.licenseFile.domain);
+
+    const sub = await call('/api/v1/verify-domain', { licenseKey: LICENSE_KEY, domain: 'new.shop.example.com' });
+    console.log('   子域校验:', sub.body.valid ? '✅ 覆盖' : '❌ 未覆盖');
+
+    const foreign = await call('/api/v1/verify-domain', { licenseKey: LICENSE_KEY, domain: 'other-site.com' });
+    console.log('   未授权域名:', foreign.body.valid === false ? '✅ 正确拒绝（' + foreign.body.reason + '）' : '❌ 竟然放行');
+
+    const off = await call('/api/v1/deactivate-domain', { licenseKey: LICENSE_KEY, domain: 'shop.example.com', reason: 'demo 结束' });
+    console.log('   解绑域名:', off.status, '| 剩余额度:', off.body?.domainCount);
+  } else {
+    console.log('   （当前授权未开启域名额度或额度已满）:', JSON.stringify(domainActivate.body).slice(0, 160));
+  }
+} else {
+  console.log('   （未提供 LICENSE_KEY，跳过）');
+}
+
+console.log('== 7. 无 Key / 错 Key 的拒绝行为 ==');
 const noKey = await fetch(BASE_URL + '/api/v1/public-key');
 console.log('   不带 X-Api-Key:', noKey.status, JSON.stringify(await noKey.json()).slice(0, 80));

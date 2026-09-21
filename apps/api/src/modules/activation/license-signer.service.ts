@@ -21,6 +21,9 @@ export interface LicenseFilePayload {
   features: string[];
   maxDevices: number;
   deviceFingerprint: string | null;
+  /** 域名授权时绑定的域名（设备授权为 null） */
+  domain: string | null;
+  maxDomains: number;
   offlineGraceDays: number;
   remainingUsages: number | null;
   nonce: string;

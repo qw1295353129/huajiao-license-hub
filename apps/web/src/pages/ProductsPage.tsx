@@ -113,6 +113,11 @@ export function ProductsPage() {
                               <span>{LICENSE_TYPE_LABEL[plan.licenseType] ?? plan.licenseType}</span>
                               <span>{plan.durationDays ? plan.durationDays + ' 天' : '永久'}</span>
                               <span>{plan.maxDevices === 0 ? '设备不限' : plan.maxDevices + ' 台设备'}</span>
+                              <span>
+                                {plan.maxDomains > 0
+                                  ? plan.maxDomains + ' 个域名' + (plan.allowSubdomains ? '（含子域）' : '')
+                                  : '不支持域名授权'}
+                              </span>
                               <span>离线宽限 {plan.offlineGraceDays} 天</span>
                               <span>{formatMoney(plan.priceCents, plan.currency)}</span>
                             </div>
@@ -254,6 +259,8 @@ function CreatePlanModal({ productId, existingKeys, onDone }: {
   const [licenseType, setLicenseType] = useState<'trial' | 'subscription' | 'perpetual' | 'duration' | 'consumable'>('subscription');
   const [durationDays, setDurationDays] = useState('365');
   const [maxDevices, setMaxDevices] = useState('1');
+  const [maxDomains, setMaxDomains] = useState('0');
+  const [allowSubdomains, setAllowSubdomains] = useState(true);
   const [price, setPrice] = useState('0');
   const [features, setFeatures] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -267,6 +274,8 @@ function CreatePlanModal({ productId, existingKeys, onDone }: {
         licenseType,
         ...(licenseType === 'perpetual' ? {} : { durationDays: Number(durationDays) }),
         maxDevices: Number(maxDevices),
+        maxDomains: Number(maxDomains),
+        allowSubdomains,
         priceCents: Math.round(Number(price) * 100),
         featureKeys: features,
       });
@@ -341,6 +350,23 @@ function CreatePlanModal({ productId, existingKeys, onDone }: {
                   <Label>价格（元）</Label>
                   <Input inputMode="decimal" />
                 </TextField>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <TextField name="maxDomains" value={maxDomains} onChange={setMaxDomains} fullWidth>
+                  <Label>域名额度（0 = 不支持域名授权）</Label>
+                  <Input inputMode="numeric" />
+                </TextField>
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2 text-xs opacity-75">
+                    <input
+                      type="checkbox"
+                      checked={allowSubdomains}
+                      onChange={(event) => setAllowSubdomains(event.target.checked)}
+                    />
+                    允许子域名（授权 example.com 覆盖 *.example.com）
+                  </label>
+                </div>
               </div>
 
               {existingKeys.length > 0 ? (

@@ -45,6 +45,16 @@ async function call(path, { method = 'POST', body, token, headers = {} } = {}) {
   return { status: res.status, body: json };
 }
 
+/** 按站点时区求「今天 + N 天」的日期（YYYY-MM-DD），避免结果随运行钟点变化 */
+function siteDatePlusDays(days, timeZone = process.env.TIMEZONE || 'Asia/Shanghai') {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  const base = new Date(today + 'T00:00:00Z');
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
 async function waitForHealth(timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -130,7 +140,7 @@ try {
 
   const plan = await call('/api/admin/products/' + productId + '/plans', { token: adminToken, body: {
     code: 'pro-yearly', name: '专业版 · 年付', licenseType: 'subscription', durationDays: 365,
-    maxDevices: 1, featureKeys: ['pro-mode'], priceCents: 19900,
+    maxDevices: 1, maxDomains: 2, featureKeys: ['pro-mode'], priceCents: 19900,
   } });
   planId = plan.body?.id;
   check('创建订阅型策略（限 1 台设备）', plan.status === 201 && Boolean(planId));
@@ -224,8 +234,41 @@ try {
     body: { licenseKey, device: deviceB } });
   check('解绑后可换机激活', movedToB.status === 201 && movedToB.body.entitlements.activeDevices === 1);
 
-  console.log('\n=== 7. 到期提醒（定时任务）===');
-  const soon = new Date(Date.now() + 7 * 86_400_000 + 3_600_000).toISOString();
+  console.log('\n=== 7. 域名授权（Web 应用场景）===');
+  const domainActivate = await call('/api/v1/activate-domain', { headers: { 'X-Api-Key': apiKey },
+    body: { licenseKey, product: 'acceptance-app', domain: 'https://www.Shop.Acceptance.com:8443/admin/login' } });
+  check('域名激活成功并自动归一化', domainActivate.status === 201 && domainActivate.body.domain === 'shop.acceptance.com',
+    '归一化结果 ' + domainActivate.body?.domain);
+  check('授权文件绑定域名并带出额度',
+    domainActivate.body?.licenseFile?.domain === 'shop.acceptance.com' && domainActivate.body?.entitlements?.maxDomains === 2,
+    '额度 ' + domainActivate.body?.entitlements?.domainCount + '/' + domainActivate.body?.entitlements?.maxDomains);
+
+  const subCheck = await call('/api/v1/verify-domain', { headers: { 'X-Api-Key': apiKey },
+    body: { licenseKey, domain: 'new.shop.acceptance.com' } });
+  check('子域名被授权覆盖', subCheck.body?.valid === true);
+
+  const foreignDomain = await call('/api/v1/verify-domain', { headers: { 'X-Api-Key': apiKey },
+    body: { licenseKey, domain: 'evil-acceptance.com' } });
+  check('未授权域名被拒绝', foreignDomain.body?.valid === false, String(foreignDomain.body?.reason));
+
+  const domainLimit = await call('/api/v1/activate-domain', { headers: { 'X-Api-Key': apiKey },
+    body: { licenseKey, domain: 'second.acceptance.com' } });
+  const overLimit = await call('/api/v1/activate-domain', { headers: { 'X-Api-Key': apiKey },
+    body: { licenseKey, domain: 'third.acceptance.com' } });
+  check('域名额度用满后拒绝新域名', domainLimit.status === 201 && overLimit.status === 409
+    && overLimit.body?.code === 'DOMAIN_LIMIT_REACHED');
+
+  const domainOff = await call('/api/v1/deactivate-domain', { headers: { 'X-Api-Key': apiKey },
+    body: { licenseKey, domain: 'second.acceptance.com', reason: '验收结束' } });
+  check('域名解绑后释放额度', domainOff.status === 201 && domainOff.body?.domainCount === 1);
+
+  const domainList = await call('/api/admin/licenses/' + licenseId + '/domains', { method: 'GET', token: adminToken });
+  const activeDomains = (domainList.body ?? []).filter((row) => row.status === 'active');
+  check('管理端可见域名绑定列表', activeDomains.length === 1 && activeDomains[0].domain === 'shop.acceptance.com');
+
+  console.log('\n=== 8. 到期提醒（定时任务）===');
+  // 7 天后（站点时区当天中午），避免因运行时刻接近零点而落到第 8 天
+  const soon = siteDatePlusDays(7) + 'T04:00:00.000Z';
   await call('/api/admin/licenses/' + licenseId, { method: 'PATCH', token: adminToken, body: { expiresAt: soon } });
   const remind = await call('/api/admin/tasks/run', { token: adminToken, body: { task: 'expiry-reminders' } });
   check('定时任务发出 T-7 到期提醒', remind.status === 201 && remind.body.detail.sent >= 1, JSON.stringify(remind.body.detail));
@@ -235,12 +278,12 @@ try {
   const reminderMail = (mails.body.items ?? []).find((m) => m.template === 'license_expiring');
   check('提醒邮件已进入发送日志', Boolean(reminderMail), reminderMail ? reminderMail.subject : '未找到');
 
-  console.log('\n=== 8. 续费延期 ===');
+  console.log('\n=== 9. 续费延期 ===');
   const extend = await call('/api/admin/licenses/' + licenseId + '/extend', { token: adminToken, body: { days: 365, reason: '客户续费' } });
   const days = Math.round((new Date(extend.body.expiresAt) - Date.now()) / 86_400_000);
   check('管理员延长有效期 365 天', extend.status === 201 && days > 360, '剩余 ' + days + ' 天');
 
-  console.log('\n=== 9. 订单：支付自动发码与退款吊销 ===');
+  console.log('\n=== 10. 订单：支付自动发码与退款吊销 ===');
   const order = await call('/api/admin/orders', { token: adminToken, body: {
     email: 'order@acceptance.local', items: [{ productId, planId, quantity: 2 }], markPaid: true,
   } });
@@ -254,7 +297,7 @@ try {
     body: { licenseKey: (await call('/api/admin/licenses/' + orderLicenseId + '/reveal', { method: 'GET', token: adminToken })).body.keyFormatted, device: deviceA } });
   check('已吊销授权的心跳返回失效原因', revokedVerify.body.valid === false && revokedVerify.body.reason === 'invalid_revoked');
 
-  console.log('\n=== 10. Webhook 事件投递与验签 ===');
+  console.log('\n=== 11. Webhook 事件投递与验签 ===');
   const hook = await call('/api/admin/webhooks', { token: adminToken, body: {
     url: 'http://127.0.0.1:' + receiverPort + '/receiver',
     description: '验收接收端',
@@ -273,7 +316,7 @@ try {
     check('接收端可独立验签（HMAC-SHA256 + 时间戳）', hit.headers['x-lh-signature'] === expected);
   }
 
-  console.log('\n=== 11. 到期自动失效 ===');
+  console.log('\n=== 12. 到期自动失效 ===');
   const expiredLicense = await call('/api/admin/licenses', { token: adminToken, body: { productId, planId, customerEmail: 'exp@acceptance.local' } });
   await call('/api/admin/licenses/' + expiredLicense.body.license.id, { method: 'PATCH', token: adminToken,
     body: { expiresAt: new Date(Date.now() - 3600_000).toISOString() } });
@@ -281,7 +324,7 @@ try {
   const expiredDetail = await call('/api/admin/licenses/' + expiredLicense.body.license.id, { method: 'GET', token: adminToken });
   check('定时任务把过期授权置为 expired', expireTask.body.detail.expiredLicenses >= 1 && expiredDetail.body.status === 'expired');
 
-  console.log('\n=== 12. 运维：看板、审计与待办 ===');
+  console.log('\n=== 13. 运维：看板、审计与待办 ===');
   const dashboard = await call('/api/admin/dashboard', { method: 'GET', token: adminToken });
   check('看板返回 KPI 与 30 天趋势', dashboard.status === 200 && dashboard.body.timeseries.length === 30,
     '授权 ' + dashboard.body.summary.totalLicenses + ' 条 / 收入 ' + (dashboard.body.summary.revenueTotalCents / 100).toFixed(2) + ' 元');
@@ -296,7 +339,7 @@ try {
   const backlog = await call('/api/admin/tasks/backlog', { method: 'GET', token: adminToken });
   check('任务待办统计可用', typeof backlog.body.pendingWebhookDeliveries === 'number');
 
-  console.log('\n=== 13. 安全边界回归 ===');
+  console.log('\n=== 14. 安全边界回归 ===');
   const noAuth = await call('/api/admin/licenses', { method: 'GET' });
   check('未登录访问管理接口返回 401', noAuth.status === 401);
   const badKey = await call('/api/v1/verify', { headers: { 'X-Api-Key': 'lh_live_invalid_key_value' }, body: { licenseKey, device: deviceA } });
