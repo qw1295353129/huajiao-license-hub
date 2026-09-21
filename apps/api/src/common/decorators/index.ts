@@ -1,11 +1,12 @@
 import { SetMetadata, createParamDecorator, type ExecutionContext } from '@nestjs/common';
-import type { AdminRole } from '@license-hub/shared';
+import type { AdminRole, ApiKeyScope } from '@license-hub/shared';
 import type { RequestUser } from '../auth-context';
 
 export const IS_PUBLIC_KEY = 'lh:isPublic';
 export const ROLES_KEY = 'lh:roles';
 export const AUDIENCE_KEY = 'lh:audience';
 export const AUDIT_KEY = 'lh:audit';
+export const SCOPES_KEY = 'lh:scopes';
 
 /** 公开路由：跳过登录校验。 */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
@@ -24,6 +25,15 @@ export interface AuditMeta {
   /** 是否记录请求体（默认 true，会自动脱敏） */
   recordBody?: boolean;
 }
+
+/** 客户端 API Key 所需作用域。 */
+export const RequireScopes = (...scopes: ApiKeyScope[]) => SetMetadata(SCOPES_KEY, scopes);
+
+/** 取当前请求的 API Key 上下文（只能在 /api/v1 路由里用）。 */
+export const ApiKeyCtx = createParamDecorator((_data: unknown, ctx: ExecutionContext) => {
+  const request = ctx.switchToHttp().getRequest<{ apiKey?: unknown }>();
+  return request.apiKey;
+});
 
 /** 标记需要写审计日志的写操作。 */
 export const Audit = (meta: AuditMeta) => SetMetadata(AUDIT_KEY, meta);

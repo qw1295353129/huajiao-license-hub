@@ -6,10 +6,14 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { ConfigModule } from './config/config.module';
 import { CryptoModule } from './crypto/crypto.module';
 import { DbModule } from './db/db.module';
+import { ActivationModule } from './modules/activation/activation.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuditController } from './modules/audit/audit.controller';
 import { AuthModule } from './modules/auth/auth.module';
+import { LicensesModule } from './modules/licenses/licenses.module';
+import { ProductsModule } from './modules/products/products.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -20,6 +24,10 @@ import { HealthModule } from './modules/health/health.module';
     AuditModule,
     AnalyticsModule,
     AuthModule,
+    ProductsModule,
+    LicensesModule,
+    ApiKeysModule,
+    ActivationModule,
     HealthModule,
   ],
   controllers: [AuditController],

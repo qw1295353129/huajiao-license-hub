@@ -51,14 +51,33 @@ license-hub/
 └── docs/             PRD、架构、数据模型、API、安全、部署、路线图
 ~~~
 
-## 当前状态（M1 / M2 已完成并验证）
+## 当前状态（M1–M4 已完成并验证）
 
 ~~~text
-✅ 29 项测试全绿（9 单元 + 20 e2e，真实 HTTP 请求 + 真实 Postgres 语义的 PGlite）
+✅ 49 项测试全绿（9 单元 + 40 e2e，真实 HTTP 请求 + 真实 Postgres 语义的 PGlite）
 ✅ API / Web / 共享包 类型检查 0 错误，生产构建通过
-✅ 实测：登录 → JWT → 看板聚合 → 审计日志（真实数据链路已打通）
+✅ 实测链路：上架产品 → 配策略 → 发码（单个/批量/CSV）→ 客户端激活 → 本地 Ed25519 验签 → 心跳 → 解绑 → 吊销
+✅ 管理界面：登录、概览、产品与策略、授权管理（实测 0 console 错误，见 docs/screenshots/）
 ✅ Docker Compose 与 nginx 配置就绪（本机无 Docker，未做真实镜像构建）
-🚧 授权发码、激活校验、订单卡密、业务页面：见 docs/ROADMAP.md
+🚧 待完成：客户门户、订单与支付、卡密与优惠券、邮件提醒、Webhook、其余页面（见 docs/ROADMAP.md）
+~~~
+
+## 客户端接入（三步）
+
+~~~bash
+# 1) 后台创建 API Key（只显示一次明文），2) 后台创建一条授权，3) 跑演示
+node sdk/demo.mjs <API_KEY> <LICENSE_KEY> http://localhost:3000
+~~~
+
+业务代码里只需引入 §sdk/license-client.ts§（零依赖，浏览器 / Node / Electron / Tauri 通用）：
+
+~~~ts
+const client = new LicenseClient({ baseUrl, apiKey, product: 'my-app', publicKey });
+const res = await client.activate(licenseKey, { fingerprint, os, appVersion });
+if (res.ok) {
+  const offline = await client.checkOffline(res.licenseFile); // 不联网也能判定
+  if (!offline.valid) enterLimitedMode(offline.reason);
+}
 ~~~
 
 常用命令：

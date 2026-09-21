@@ -25,23 +25,35 @@ export interface TokenBundle {
   refreshToken: string;
 }
 
-let tokens: TokenBundle | null = readTokens();
-let refreshPromise: Promise<TokenBundle | null> | null = null;
-const listeners = new Set<(tokens: TokenBundle | null) => void>();
-
 const STORAGE_KEY = 'licensehub.tokens';
 
+/**
+ * 读取本地令牌。
+ * ⚠️ 曾经把 STORAGE_KEY 声明在 §readTokens()§ 调用之后，模块初始化时命中 TDZ 抛错，
+ * 又被这里的 try/catch 静默吞掉 —— 表现为「刷新页面即掉登录」。
+ * 现在：常量先行，且只在真正解析失败时兜底。
+ */
 function readTokens(): TokenBundle | null {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null; // 隐私模式下 localStorage 不可用
+  }
+  if (!raw) return null;
+  try {
     const parsed = JSON.parse(raw) as TokenBundle;
     if (!parsed.accessToken || !parsed.refreshToken) return null;
     return parsed;
   } catch {
+    localStorage.removeItem(STORAGE_KEY);
     return null;
   }
 }
+
+let tokens: TokenBundle | null = readTokens();
+let refreshPromise: Promise<TokenBundle | null> | null = null;
+const listeners = new Set<(tokens: TokenBundle | null) => void>();
 
 export function getTokens(): TokenBundle | null {
   return tokens;
