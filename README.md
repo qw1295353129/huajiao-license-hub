@@ -10,7 +10,7 @@
 | 前端 | React 19 + TypeScript + Vite 8 + React Router 7 + TanStack Query |
 | UI | HeroUI v3 + Tailwind CSS v4 + Recharts + lucide-react |
 | 后端 | NestJS 12（Fastify 适配器）+ Drizzle ORM |
-| 授权维度 | **设备授权**（硬件指纹）与 **域名授权**（站点域名，支持子域覆盖）可并存 |
+| 授权维度 | 两条独立业务线：**授权码**（管设备）与 **域名授权**（管站点，无需授权码） |
 | 数据库 | PostgreSQL 17（本地开发/测试可用内置 PGlite，免安装） |
 | 队列/缓存 | Redis 7 + BullMQ（未配置 Redis 时自动降级为进程内实现） |
 | 部署 | Docker Compose（postgres + redis + api + web/nginx + 迁移作业） |

@@ -4,7 +4,7 @@ import {
   Avatar, Button, Dropdown, Separator, Tooltip,
 } from '@heroui/react';
 import {
-  BarChart3, Boxes, FileClock, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings,
+  BarChart3, Boxes, FileClock, Globe, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings,
   ShieldCheck, Ticket, Users, Webhook, X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -23,6 +23,7 @@ const NAV: NavItem[] = [
   { to: '/admin/customers', label: '客户', icon: Users },
   { to: '/admin/orders', label: '订单', icon: Receipt },
   { to: '/admin/redeem', label: '卡密', icon: Ticket },
+  { to: '/admin/domains', label: '域名授权', icon: Globe },
   { to: '/admin/devices', label: '设备', icon: BarChart3 },
   { to: '/admin/webhooks', label: 'Webhook', icon: Webhook },
   { to: '/admin/audit', label: '审计日志', icon: FileClock },

@@ -53,13 +53,45 @@ export interface LicenseFile {
   features: string[];
   maxDevices: number;
   deviceFingerprint: string | null;
-  /** 域名授权时绑定的站点域名（设备授权为 null/undefined） */
-  domain?: string | null;
-  maxDomains?: number;
-  offlineGraceDays: number;
+    offlineGraceDays: number;
   remainingUsages: number | null;
   nonce: string;
   sig: string;
+}
+
+/** 域名授权的授权文件（type 为 'domain'） */
+export interface DomainLicenseFile {
+  v: 1;
+  kid: string;
+  type: 'domain';
+  domainLicenseId: string;
+  product: string;
+  plan: string;
+  customer: string | null;
+  domain: string;
+  allowSubdomains: boolean;
+  issuedAt: string;
+  validFrom: string;
+  expiresAt: string | null;
+  perpetual: boolean;
+  features: string[];
+  maxDomains: number;
+  usedDomains: number;
+  offlineGraceDays: number;
+  nonce: string;
+  sig: string;
+}
+
+/** 用公钥验证域名授权文件（与服务端同一套规范化规则） */
+export async function verifyDomainFile(file: DomainLicenseFile, publicKeyBase64Url: string): Promise<boolean> {
+  const { sig, ...payload } = file;
+  if (!sig) return false;
+  try {
+    const key = await crypto.subtle.importKey('spki', base64UrlToBytes(publicKeyBase64Url), { name: 'Ed25519' }, false, ['verify']);
+    return await crypto.subtle.verify({ name: 'Ed25519' }, key, base64UrlToBytes(sig), new TextEncoder().encode(canonicalize(payload)));
+  } catch {
+    return false;
+  }
 }
 
 export interface Entitlements {
@@ -231,25 +263,22 @@ export class LicenseClient {
     return this.request('/api/v1/trial', { product: this.options.product, device, ...(email ? { email } : {}) });
   }
 
-  /* ---------------- 域名授权（Web 应用 / 插件 / SaaS） ---------------- */
+  /* ---------------- 域名授权（Web 应用 / 插件 / SaaS，无需授权码） ---------------- */
 
   /**
-   * 域名激活：把当前站点域名绑定到授权。
-   * @param domain 传 'example.com' 或 'https://www.example.com:8443/path' 都可以，服务端会归一化。
+   * 域名激活：把当前站点域名绑定的授权取回来。
+   * 域名本身即凭据 —— 客户在服务商后台开通域名授权后，这里只需传域名。
    */
   async activateDomain(
-    licenseKey: string,
     domain: string,
     options?: { environment?: 'production' | 'staging' | 'development'; userAgent?: string },
-  ): Promise<ClientResult<{ licenseFile: LicenseFile; entitlements: Entitlements; accessToken: string; domain: string; reactivated: boolean }>> {
+  ): Promise<ClientResult<{ licenseFile: DomainLicenseFile; entitlements: Entitlements; accessToken: string; domain: string }>> {
     const res = await this.request<{
-      licenseFile: LicenseFile;
+      licenseFile: DomainLicenseFile;
       entitlements: Entitlements;
       accessToken: string;
       domain: string;
-      reactivated: boolean;
-    }>('/api/v1/activate-domain', {
-      licenseKey,
+    }>('/api/v1/domain/activate', {
       domain,
       product: this.options.product,
       ...(options?.environment ? { environment: options.environment } : {}),
@@ -257,31 +286,25 @@ export class LicenseClient {
     });
     if (res.ok) {
       const key = await this.fetchPublicKey();
-      if (key && !(await verifyLicenseFile(res.licenseFile, key))) {
-        return { ok: false, reason: 'SIGNATURE_INVALID', message: '授权文件验签失败，请勿使用被篡改的文件' };
+      if (key && !(await verifyDomainFile(res.licenseFile, key))) {
+        return { ok: false, reason: 'SIGNATURE_INVALID', message: '域名授权文件验签失败' };
       }
     }
     return res;
   }
 
-  /** 域名心跳：建议在服务端每次请求（带缓存）或每日定时调用。 */
-  async verifyDomain(params: {
-    domain: string;
-    licenseKey?: string;
-    accessToken?: string;
-    userAgent?: string;
-  }): Promise<ClientResult<{ valid: boolean } & Entitlements>> {
-    return this.request('/api/v1/verify-domain', {
+  /** 域名心跳：建议服务端每次请求（带缓存）或每日定时调用。 */
+  async verifyDomain(params: { domain: string; accessToken?: string; userAgent?: string }): Promise<ClientResult<{ valid: boolean } & Entitlements>> {
+    return this.request('/api/v1/domain/verify', {
       domain: params.domain,
-      ...(params.licenseKey ? { licenseKey: params.licenseKey } : {}),
       ...(params.accessToken ? { accessToken: params.accessToken } : {}),
       ...(params.userAgent ? { userAgent: params.userAgent } : {}),
     });
   }
 
-  /** 域名解绑：释放一个域名额度。 */
-  async deactivateDomain(licenseKey: string, domain: string, reason?: string): Promise<ClientResult<{ valid: boolean; domainCount: number }>> {
-    return this.request('/api/v1/deactivate-domain', { licenseKey, domain, ...(reason ? { reason } : {}) });
+  /** 域名解绑（换域名时用，释放一个额度）。 */
+  async deactivateDomain(domain: string, reason?: string): Promise<ClientResult<{ valid: boolean; domainCount: number }>> {
+    return this.request('/api/v1/domain/deactivate', { domain, ...(reason ? { reason } : {}) });
   }
 
   async requestOffline(device: DeviceInfo, licenseKey?: string): Promise<ClientResult<{ requestCode: string }>> {

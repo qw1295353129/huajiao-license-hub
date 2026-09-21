@@ -13,6 +13,7 @@ import { DevicesPage } from '@/pages/DevicesPage';
 import { WebhooksPage } from '@/pages/WebhooksPage';
 import { AuditPage } from '@/pages/AuditPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { DomainLicensesPage } from '@/pages/DomainLicensesPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { PortalLayout } from '@/portal/PortalLayout';
@@ -22,6 +23,7 @@ import { PortalOrdersPage } from '@/portal/PortalOrdersPage';
 import { PortalRedeemPage } from '@/portal/PortalRedeemPage';
 import { PortalAccountPage } from '@/portal/PortalAccountPage';
 import { PortalResetPasswordPage } from '@/portal/PortalResetPasswordPage';
+import { PortalDomainsPage } from '@/portal/PortalDomainsPage';
 
 function Splash({ label }: { label: string }) {
   return (
@@ -59,6 +61,7 @@ export default function App() {
         <Route path="customers" element={<CustomersPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="redeem" element={<RedeemPage />} />
+        <Route path="domains" element={<DomainLicensesPage />} />
         <Route path="devices" element={<DevicesPage />} />
         <Route path="webhooks" element={<WebhooksPage />} />
         <Route path="audit" element={<AuditPage />} />
@@ -72,6 +75,7 @@ export default function App() {
         <Route path="licenses" element={<PortalLicensesPage />} />
         <Route path="orders" element={<PortalOrdersPage />} />
         <Route path="redeem" element={<PortalRedeemPage />} />
+        <Route path="domains" element={<PortalDomainsPage />} />
         <Route path="account" element={<PortalAccountPage />} />
       </Route>
       <Route path="/portal/login" element={<PortalLoginPage />} />

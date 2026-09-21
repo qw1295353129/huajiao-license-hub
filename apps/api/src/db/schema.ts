@@ -171,9 +171,6 @@ export const licenses = pgTable('licenses', {
   featureKeys: jsonb('feature_keys').$type<string[]>().notNull().default([]),
   maxUsages: integer('max_usages'),
   remainingUsages: integer('remaining_usages'),
-  maxDomains: integer('max_domains').notNull().default(0),
-  allowSubdomains: boolean('allow_subdomains').notNull().default(true),
-  domainCount: integer('domain_count').notNull().default(0),
   source: text('source').$type<LicenseSource>().notNull().default('manual'),
   batchId: uuid('batch_id'),
   orderId: uuid('order_id'),
@@ -235,34 +232,80 @@ export const licenseActivations = pgTable('license_activations', {
   index('license_activations_device_idx').on(t.deviceId),
 ]);
 
+/* ------------------------------------------------------------------ 域名授权（独立体系，不依赖授权码） */
+
 /**
- * 域名授权绑定：把授权绑定到具体站点域名（Web 应用 / 插件 / SaaS 场景）。
- * domain 存归一化后的主机名（小写、去 www、IDN 转 punycode），domainRaw 保留用户原始输入便于客服核对。
+ * 域名授权：运营者直接发给"域名 + 套餐 + 到期"的授权。
+ * 客户在自己的网站后台填入域名即可激活，**不需要授权码**。
+ * 一张域名授权覆盖 maxDomains 个域名（来自套餐，可单独覆盖）。
  */
-export const licenseDomains = pgTable('license_domains', {
+export const domainLicenses = pgTable('domain_licenses', {
   id: id(),
-  licenseId: uuid('license_id').notNull().references(() => licenses.id, { onDelete: 'cascade' }),
+  productId: uuid('product_id').notNull().references(() => products.id, { onDelete: 'restrict' }),
+  planId: uuid('plan_id').notNull().references(() => plans.id, { onDelete: 'restrict' }),
+  customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'set null' }),
+  customerEmail: text('customer_email'),
+  status: text('status').$type<LicenseStatus>().notNull().default('active'),
+  maxDomains: integer('max_domains').notNull().default(1),
+  allowSubdomains: boolean('allow_subdomains').notNull().default(true),
+  domainCount: integer('domain_count').notNull().default(0),
+  validFrom: timestamp('valid_from', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  featureKeys: jsonb('feature_keys').$type<string[]>().notNull().default([]),
+  notes: text('notes'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+  lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedReason: text('revoked_reason'),
+  issuedBy: uuid('issued_by').references(() => admins.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [
+  index('domain_licenses_status_idx').on(t.status),
+  index('domain_licenses_product_idx').on(t.productId, t.status),
+  index('domain_licenses_customer_idx').on(t.customerId),
+  index('domain_licenses_email_idx').on(t.customerEmail),
+]);
+
+/** 已授权域名：域名授权的具体绑定对象。域名全局唯一（同一域名只能有一张有效授权）。 */
+export const authorizedDomains = pgTable('authorized_domains', {
+  id: id(),
+  domainLicenseId: uuid('domain_license_id').notNull().references(() => domainLicenses.id, { onDelete: 'cascade' }),
   domain: text('domain').notNull(),
   domainRaw: text('domain_raw'),
   status: text('status').$type<ActivationStatus>().notNull().default('active'),
-  /** 环境标记：production / staging / development，便于同一授权区分测试站 */
   environment: text('environment').$type<'production' | 'staging' | 'development'>().notNull().default('production'),
-  /** 服务端集成时记录的最近一次校验来源 IP 与 UA */
+  source: text('source').$type<'admin' | 'customer' | 'import'>().notNull().default('admin'),
   lastIp: text('last_ip'),
   userAgent: text('user_agent'),
   activatedAt: timestamp('activated_at', { withTimezone: true }).defaultNow().notNull(),
   deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  verifyCount: integer('verify_count').notNull().default(0),
   unbindReason: text('unbind_reason'),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: createdAt(),
 }, (t) => [
-  uniqueIndex('license_domains_active_key')
-    .on(t.licenseId, t.domain)
+  uniqueIndex('authorized_domains_active_key')
+    .on(t.domain)
     .where(sql`status = 'active'`),
-  index('license_domains_license_idx').on(t.licenseId, t.status),
-  index('license_domains_domain_idx').on(t.domain),
+  index('authorized_domains_license_idx').on(t.domainLicenseId, t.status),
 ]);
+
+/** 域名授权事件流（与授权码的事件流分开，避免混在一起看） */
+export const domainEvents = pgTable('domain_events', {
+  id: id(),
+  domainLicenseId: uuid('domain_license_id').notNull().references(() => domainLicenses.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  actorType: text('actor_type').$type<ActorType>().notNull().default('system'),
+  actorId: uuid('actor_id'),
+  actorLabel: text('actor_label'),
+  domain: text('domain'),
+  message: text('message'),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  ip: text('ip'),
+  createdAt: createdAt(),
+}, (t) => [index('domain_events_license_idx').on(t.domainLicenseId, t.createdAt)]);
 
 export const licenseEvents = pgTable('license_events', {
   id: id(),
@@ -516,7 +559,8 @@ export const offlineRequests = pgTable('offline_requests', {
 export const schema = {
   admins, sessions, customers, authTokens,
   products, productFeatures, productReleases, plans,
-  licenses, devices, licenseActivations, licenseDomains, licenseEvents, verificationLogs, trials,
+  licenses, devices, licenseActivations, licenseEvents, verificationLogs, trials,
+  domainLicenses, authorizedDomains, domainEvents,
   orders, orderItems, paymentEvents, coupons, redeemBatches, redeemCodes,
   apiKeys, webhookEndpoints, webhookDeliveries, auditLogs, emailLogs, signingKeys, settings,
   offlineRequests,

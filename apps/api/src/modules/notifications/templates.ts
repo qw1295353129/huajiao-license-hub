@@ -37,6 +37,10 @@ export const EMAIL_TEMPLATES = {
     subject: '设备已解绑',
     body: '你好 {{name}}：\n\n授权 {{licenseKey}} 下的设备「{{deviceName}}」已解绑，当前可用设备 {{activeDevices}}/{{maxDevices}}。',
   },
+  domain_authorized: {
+    subject: '域名 {{domain}} 已开通授权',
+    body: '你好 {{name}}：\n\n域名 {{domain}} 已成功绑定授权，有效期至 {{expiresAt}}。\n现在可以在网站后台点击「域名激活」完成接入。',
+  },
   redeem_success: {
     subject: '卡密兑换成功',
     body: '你好 {{name}}：\n\n卡密 {{code}} 兑换成功。\n产品：{{product}}\n套餐：{{plan}}\n授权码：{{licenseKey}}\n有效期至：{{expiresAt}}',

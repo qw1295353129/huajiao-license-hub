@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Chip, Separator, toast } from '@heroui/react';
-import { Globe, Laptop, Smartphone } from 'lucide-react';
+import { Laptop, Smartphone } from 'lucide-react';
 import { portalApi } from '@/lib/api';
 import { ErrorNotice, Loading, PageHeader, StatusChip, Tag } from '@/components/common/ui';
 import { daysLeft, formatDateTime, fromNow } from '@/lib/format';
@@ -17,8 +17,6 @@ interface MyLicense {
   licenseType: string;
   maxDevices: number;
   activationCount: number;
-  maxDomains: number;
-  domainCount: number;
   expiresAt: string | null;
   featureKeys: string[];
 }
@@ -34,20 +32,11 @@ interface DeviceRow {
   deviceName: string | null;
 }
 
-interface DomainRow {
-  id: string;
-  domain: string;
-  status: string;
-  environment: string | null;
-  activatedAt: string;
-  lastSeenAt: string;
-}
-
 interface LicenseDetail extends MyLicense {
   devices: DeviceRow[];
-  domains: DomainRow[];
 }
 
+/** 我的授权：授权码维度（设备）。域名授权在「我的域名授权」页单独管理。 */
 export function PortalLicensesPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -99,18 +88,6 @@ function LicenseCard({ license, expanded, onToggle }: { license: MyLicense; expa
     enabled: expanded,
   });
 
-  const unbindDomain = useMutation({
-    mutationFn: (domainId: string) => portalApi.delete<{ domainCount: number }>(
-      '/api/portal/licenses/' + license.id + '/domains/' + domainId,
-    ),
-    onSuccess: (res) => {
-      toast.success('域名已解绑', { description: '剩余可用域名 ' + res.domainCount + ' 个' });
-      void queryClient.invalidateQueries({ queryKey: ['portal-license', license.id] });
-      void queryClient.invalidateQueries({ queryKey: ['portal-licenses'] });
-    },
-    onError: (error: Error) => toast.danger('解绑失败', { description: error.message }),
-  });
-
   const unbind = useMutation({
     mutationFn: (activationId: string) => portalApi.delete<{ activeDevices: number; remainingUnbinds: number | null }>(
       '/api/portal/licenses/' + license.id + '/devices/' + activationId,
@@ -138,9 +115,6 @@ function LicenseCard({ license, expanded, onToggle }: { license: MyLicense; expa
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] opacity-60">
               <span>{license.planName} · {LICENSE_TYPE_LABEL[license.licenseType as 'trial'] ?? license.licenseType}</span>
               <span>设备 {license.activationCount}/{license.maxDevices || '不限'}</span>
-              {license.maxDomains > 0 ? (
-                <span>域名 {license.domainCount}/{license.maxDomains}</span>
-              ) : null}
               <span>{license.expiresAt ? '到期 ' + formatDateTime(license.expiresAt) : '永久有效'}</span>
             </div>
           </div>
@@ -170,42 +144,6 @@ function LicenseCard({ license, expanded, onToggle }: { license: MyLicense; expa
             {detail.data && detail.data.devices.length === 0 ? (
               <p className="text-xs opacity-50">还没有设备激活此授权</p>
             ) : null}
-            {license.maxDomains > 0 ? (
-              <>
-                <p className="mb-2 mt-4 flex items-center gap-1.5 text-xs font-medium opacity-70">
-                  <Globe size={13} /> 已绑定域名（{detail.data?.domains.filter((row) => row.status === 'active').length ?? 0}
-                  /{license.maxDomains}）
-                </p>
-                {(detail.data?.domains ?? []).filter((row) => row.status === 'active').length === 0 ? (
-                  <p className="text-xs opacity-50">还没有绑定域名。在软件后台填入本站域名并点击「域名激活」即可。</p>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {(detail.data?.domains ?? []).filter((row) => row.status === 'active').map((row) => (
-                      <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-black/8 p-2.5 text-xs dark:border-white/10">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Globe size={14} />
-                          <div className="min-w-0">
-                            <p className="mono-code truncate">{row.domain}</p>
-                            <p className="opacity-45">最近校验 {fromNow(row.lastSeenAt)}</p>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="danger-soft"
-                          isDisabled={unbindDomain.isPending}
-                          onPress={() => {
-                            if (window.confirm('解绑域名 ' + row.domain + '？该站点将立即失效。')) unbindDomain.mutate(row.id);
-                          }}
-                        >
-                          解绑
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            ) : null}
-
             <ul className="flex flex-col gap-2">
               {(detail.data?.devices ?? []).map((device) => (
                 <li key={device.id} className="flex items-center justify-between gap-3 rounded-lg border border-black/8 p-2.5 text-xs dark:border-white/10">

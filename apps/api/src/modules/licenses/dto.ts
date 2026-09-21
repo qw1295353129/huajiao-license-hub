@@ -38,12 +38,6 @@ export class CreateLicenseDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1)
   maxUsages?: number;
 
-  /** 覆盖策略的域名额度（0 = 关闭域名授权） */
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(10000)
-  maxDomains?: number;
-
-  @IsOptional() @IsBoolean()
-  allowSubdomains?: boolean;
 
   @IsOptional() @IsString() @MaxLength(500)
   notes?: string;
@@ -71,8 +65,6 @@ export class BatchCreateLicensesDto {
   @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) featureKeys?: string[];
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @IsOptional() @IsString() @MaxLength(60) batchLabel?: string;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(10000) maxDomains?: number;
-  @IsOptional() @IsBoolean() allowSubdomains?: boolean;
 }
 
 export class UpdateLicenseDto {

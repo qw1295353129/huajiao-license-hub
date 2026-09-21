@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { desc, eq } from 'drizzle-orm';
-import type { LicenseFile } from '@license-hub/shared';
+import { JwtService } from '@nestjs/jwt';
+import type { DomainLicenseFile, LicenseFile } from '@license-hub/shared';
 import { CryptoService, canonicalJson } from '../../crypto/crypto.service';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
@@ -21,9 +22,6 @@ export interface LicenseFilePayload {
   features: string[];
   maxDevices: number;
   deviceFingerprint: string | null;
-  /** 域名授权时绑定的域名（设备授权为 null） */
-  domain: string | null;
-  maxDomains: number;
   offlineGraceDays: number;
   remainingUsages: number | null;
   nonce: string;
@@ -42,6 +40,7 @@ export class LicenseSignerService implements OnApplicationBootstrap {
   constructor(
     @Inject(DB) private readonly handle: DatabaseHandle,
     private readonly crypto: CryptoService,
+    private readonly jwt: JwtService,
   ) {}
 
   private get db() {
@@ -142,6 +141,38 @@ export class LicenseSignerService implements OnApplicationBootstrap {
     };
     const sig = this.crypto.signPayload(body, privateKey);
     return { ...body, sig } as LicenseFile;
+  }
+
+  /**
+   * 签发域名授权文件（与设备授权文件不同的类型与字段）。
+   * 客户端内置同一把公钥即可验签。
+   */
+  async signDomain(payload: Omit<DomainLicenseFile, 'v' | 'kid' | 'type' | 'issuedAt' | 'nonce' | 'sig'> & { nonce?: string }): Promise<DomainLicenseFile> {
+    const { kid, privateKey } = await this.loadPrivateKey();
+    const body: Omit<DomainLicenseFile, 'sig'> = {
+      ...payload,
+      v: 1,
+      kid,
+      type: 'domain',
+      issuedAt: new Date().toISOString(),
+      nonce: payload.nonce ?? this.crypto.randomHex(8),
+    };
+    const sig = this.crypto.signPayload(body, privateKey);
+    return { ...body, sig };
+  }
+
+  /** 域名授权的客户端令牌（短期，用于心跳快路径）。 */
+  async signDomainClientToken(payload: { sub: string; domain: string; aud: string }, ttlSeconds: number): Promise<string> {
+    return this.jwt.signAsync(payload, { expiresIn: ttlSeconds });
+  }
+
+  /** 校验域名授权文件（供离线/服务端自检使用）。 */
+  async verifyDomainFile(file: DomainLicenseFile): Promise<boolean> {
+    const { sig, ...payload } = file;
+    const keys = await this.listPublicKeys();
+    const key = keys.find((row) => row.kid === file.kid);
+    if (!key) return false;
+    return this.crypto.verifyPayload(payload, sig, key.publicKey);
   }
 
   /** 本地自检：用公钥验证刚签发的文件（防止密钥与实现不一致）。 */

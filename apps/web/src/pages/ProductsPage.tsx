@@ -352,9 +352,12 @@ function CreatePlanModal({ productId, existingKeys, onDone }: {
                 </TextField>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* 域名授权是与「授权码」完全独立的一条线：这里单独成块配置 */}
+              <div className="rounded-xl border border-black/8 p-3 dark:border-white/10">
+                <p className="mb-2 text-xs font-medium opacity-70">域名授权（独立于授权码）</p>
+                <div className="grid grid-cols-2 gap-3">
                 <TextField name="maxDomains" value={maxDomains} onChange={setMaxDomains} fullWidth>
-                  <Label>域名额度（0 = 不支持域名授权）</Label>
+                  <Label>可授权域名数（0 = 不用于域名授权）</Label>
                   <Input inputMode="numeric" />
                 </TextField>
                 <div className="flex items-end pb-2">
@@ -366,6 +369,7 @@ function CreatePlanModal({ productId, existingKeys, onDone }: {
                     />
                     允许子域名（授权 example.com 覆盖 *.example.com）
                   </label>
+                </div>
                 </div>
               </div>
 

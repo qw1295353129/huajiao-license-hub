@@ -36,9 +36,6 @@ export interface LicenseView {
   expiresAt: Date | null;
   featureKeys: string[];
   remainingUsages: number | null;
-  maxDomains: number;
-  allowSubdomains: boolean;
-  domainCount: number;
   source: LicenseSource;
   notes: string | null;
   lastVerifiedAt: Date | null;
@@ -146,8 +143,6 @@ export class LicensesService {
     maxDevices?: number;
     featureKeys?: string[];
     maxUsages?: number | null;
-    maxDomains?: number | null;
-    allowSubdomains?: boolean | null;
     notes?: string | null;
     source: LicenseSource;
     issuedBy?: string | null;
@@ -169,8 +164,6 @@ export class LicensesService {
       featureKeys: input.featureKeys ?? input.plan.featureKeys,
       maxUsages: input.maxUsages ?? input.plan.maxUsages ?? null,
       remainingUsages: (input.maxUsages ?? input.plan.maxUsages) ?? null,
-      maxDomains: input.maxDomains ?? input.plan.maxDomains ?? 0,
-      allowSubdomains: input.allowSubdomains ?? input.plan.allowSubdomains ?? true,
       source: input.source,
       notes: input.notes ?? null,
       issuedBy: input.issuedBy ?? null,
@@ -204,8 +197,6 @@ export class LicensesService {
       maxDevices: dto.maxDevices,
       featureKeys: dto.featureKeys,
       maxUsages: dto.maxUsages ?? null,
-      maxDomains: dto.maxDomains ?? null,
-      allowSubdomains: dto.allowSubdomains ?? null,
       notes: dto.notes,
       source: dto.source ?? 'manual',
       issuedBy: actor.id ?? null,
@@ -262,8 +253,6 @@ export class LicensesService {
         expiresAt,
         maxDevices: dto.maxDevices,
         featureKeys: dto.featureKeys,
-        maxDomains: dto.maxDomains ?? null,
-        allowSubdomains: dto.allowSubdomains ?? null,
         notes: dto.notes ?? null,
         source: 'batch',
         issuedBy: actor.id ?? null,
@@ -323,9 +312,6 @@ export class LicensesService {
       expiresAt: licenses.expiresAt,
       featureKeys: licenses.featureKeys,
       remainingUsages: licenses.remainingUsages,
-      maxDomains: licenses.maxDomains,
-      allowSubdomains: licenses.allowSubdomains,
-      domainCount: licenses.domainCount,
       source: licenses.source,
       notes: licenses.notes,
       lastVerifiedAt: licenses.lastVerifiedAt,
@@ -425,8 +411,6 @@ export class LicensesService {
     }
     if (dto.notes !== undefined) patch.notes = dto.notes;
     if (dto.remainingUsages !== undefined) patch.remainingUsages = dto.remainingUsages;
-    if (dto.maxDomains !== undefined) patch.maxDomains = dto.maxDomains;
-    if (dto.allowSubdomains !== undefined) patch.allowSubdomains = dto.allowSubdomains;
 
     await this.db.update(licenses).set(patch).where(eq(licenses.id, id));
     await this.recordEvent({

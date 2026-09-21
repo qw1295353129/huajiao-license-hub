@@ -11,6 +11,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { CustomersModule } from './modules/customers/customers.module';
+import { DomainsModule } from './modules/domains/domains.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PortalModule } from './modules/portal/portal.module';
@@ -45,6 +46,7 @@ import { HealthModule } from './modules/health/health.module';
     RedeemModule,
     OrdersModule,
     CouponsModule,
+    DomainsModule,
     PortalModule,
     HealthModule,
   ],

@@ -128,28 +128,36 @@
 | POST | `/offline/activate` | `{requestCode, responseCode}` → `{ licenseFile }` |
 | GET | `/version-check` | `?product=&channel=` → 最新版本与下载地址 |
 
-### 域名授权
+### 域名授权（独立体系，**不需要授权码**）
 
-Web 应用 / 插件 / SaaS 场景把授权绑定到**域名**而不是设备：
+域名授权是与授权码**完全分开**的一条线：运营者直接给「域名 + 套餐 + 到期」发授权，
+客户在自己的网站后台填入域名即可激活。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET/POST | §/api/admin/domain-licenses§ | 列表 / 开通（可同时绑定多个域名） |
+| GET/PATCH/DELETE | §/api/admin/domain-licenses/:id§ | 详情（含域名与事件）/ 修改 / 删除 |
+| POST | §/api/admin/domain-licenses/:id/revoke§ · §suspend§ · §resume§ · §extend§ | 状态与延期 |
+| POST | §/api/admin/domain-licenses/:id/domains§ | 绑定域名 |
+| DELETE | §/api/admin/domain-licenses/domains/:domainId§ | 解绑域名 |
+| GET/POST | §/api/portal/domain-licenses§ · POST §/:id/domains§ · DELETE §/domains/:domainId§ | 客户自助查看/增删域名 |
+| POST | §/api/v1/domain/activate§ | **网站只需传域名** → 签名授权文件（type=domain） |
+| POST | §/api/v1/domain/verify§ | 域名心跳校验 |
+| POST | §/api/v1/domain/deactivate§ | 域名解绑 |
 
 ~~~bash
-# 激活（域名会归一化：去协议/端口/路径、小写、去 www、IDN 转 punycode）
-curl -X POST https://lic.example.com/api/v1/activate-domain \
-  -H "X-Api-Key: lh_live_xxx" -H "Content-Type: application/json" \
-  -d '{"licenseKey":"XXXX-XXXX-XXXX-XXXX","domain":"https://www.Shop.Example.com:8443/admin"}'
-# → {"domain":"shop.example.com","entitlements":{"domainCount":1,"maxDomains":2},...}
+# 运营者：直接给域名发授权（不需要先发码）
+curl -X POST .../api/admin/domain-licenses -H "Authorization: Bearer <admin>" \
+  -d '{"productId":"...","planId":"...","customerEmail":"buyer@example.com","domains":["shop.example.com"]}'
 
-# 心跳（服务端每次请求或每日定时调用）
-curl -X POST .../api/v1/verify-domain -d '{"licenseKey":"...","domain":"shop.example.com"}'
+# 客户网站：填域名即可激活
+curl -X POST .../api/v1/domain/activate -H "X-Api-Key: lh_live_xxx" \
+  -d '{"domain":"https://www.shop.example.com:8443/admin"}'
+# → {"domain":"shop.example.com","licenseFile":{"type":"domain",...},"entitlements":{...}}
 ~~~
 
-规则：
-
-- 域名额度由策略/授权的 §maxDomains§ 决定，**0 表示关闭域名授权**；
-- §allowSubdomains=true§ 时，授权 §example.com§ 覆盖 §*.example.com§，但**不覆盖** §notexample.com§；
-- 同一域名的不同写法（大小写、www、端口、路径）视为同一域名，重复激活幂等、不重复占额度；
-- 域名授权与设备授权**互不占用额度**，同一张授权可同时用于桌面端与网站；
-- 事件：§domain.bound§ / §domain.unbound§ 会推送到 Webhook。
+规则：域名归一化（去协议/端口/路径/www、IDN→punycode）；§allowSubdomains§ 时 §example.com§ 覆盖 §*.example.com§；
+同一域名全局唯一（不能被两张授权同时占用）；额度来自套餐的「域名授权」设置；事件 §domain.bound§ / §domain.unbound§ 推送到 Webhook。
 
 ### 授权文件（licenseFile）格式
 

@@ -5,6 +5,7 @@ import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 import { licenseEvents, licenses, products, redeemCodes, verificationLogs, webhookDeliveries } from '../../db/schema';
+import { DomainLicensesService } from '../domains/domain-licenses.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { TokenService } from '../auth/token.service';
@@ -32,6 +33,7 @@ export class TasksService {
     private readonly settings: SettingsService,
     private readonly tokens: TokenService,
     private readonly webhooks: WebhooksService,
+    private readonly domainLicenses: DomainLicensesService,
   ) {}
 
   private get db() {
@@ -81,12 +83,21 @@ export class TasksService {
       ))
       .returning({ id: redeemCodes.id });
 
-    if (expired.length > 0 || voidedCodes.length > 0) {
-      this.logger.log('到期处理：授权 ' + expired.length + ' 条，卡密 ' + voidedCodes.length + ' 张');
+    // 域名授权是独立体系，单独到期处理
+    const expiredDomains = await this.domainLicenses.expireOverdue();
+
+    if (expired.length > 0 || voidedCodes.length > 0 || expiredDomains > 0) {
+      this.logger.log(
+        '到期处理：授权 ' + expired.length + ' 条，卡密 ' + voidedCodes.length + ' 张，域名授权 ' + expiredDomains + ' 条',
+      );
     }
     return {
       task: 'expire-licenses',
-      detail: { expiredLicenses: expired.length, voidedRedeemCodes: voidedCodes.length },
+      detail: {
+        expiredLicenses: expired.length,
+        voidedRedeemCodes: voidedCodes.length,
+        expiredDomainLicenses: expiredDomains,
+      },
     };
   }
 

@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Button, Card, Separator, toast } from '@heroui/react';
-import { KeyRound, LogOut, Receipt, Ticket, User } from 'lucide-react';
+import { Globe, KeyRound, LogOut, Receipt, Ticket, User } from 'lucide-react';
 import { usePortalAuth } from '@/lib/auth';
 
 const NAV = [
   { to: '/portal/licenses', label: '我的授权', icon: KeyRound },
+  { to: '/portal/domains', label: '我的域名授权', icon: Globe },
   { to: '/portal/orders', label: '我的订单', icon: Receipt },
   { to: '/portal/redeem', label: '卡密兑换', icon: Ticket },
   { to: '/portal/account', label: '账号', icon: User },

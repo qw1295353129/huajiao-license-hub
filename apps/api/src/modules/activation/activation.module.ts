@@ -22,6 +22,6 @@ import { SigningKeysController } from './signing-keys.controller';
   ],
   controllers: [ActivationController, AdminActivationController, SigningKeysController],
   providers: [ActivationService, LicenseSignerService],
-  exports: [ActivationService, LicenseSignerService],
+  exports: [ActivationService, LicenseSignerService, JwtModule],
 })
 export class ActivationModule {}

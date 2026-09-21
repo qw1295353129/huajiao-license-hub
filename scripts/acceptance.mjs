@@ -234,38 +234,51 @@ try {
     body: { licenseKey, device: deviceB } });
   check('解绑后可换机激活', movedToB.status === 201 && movedToB.body.entitlements.activeDevices === 1);
 
-  console.log('\n=== 7. 域名授权（Web 应用场景）===');
-  const domainActivate = await call('/api/v1/activate-domain', { headers: { 'X-Api-Key': apiKey },
-    body: { licenseKey, product: 'acceptance-app', domain: 'https://www.Shop.Acceptance.com:8443/admin/login' } });
-  check('域名激活成功并自动归一化', domainActivate.status === 201 && domainActivate.body.domain === 'shop.acceptance.com',
-    '归一化结果 ' + domainActivate.body?.domain);
-  check('授权文件绑定域名并带出额度',
-    domainActivate.body?.licenseFile?.domain === 'shop.acceptance.com' && domainActivate.body?.entitlements?.maxDomains === 2,
-    '额度 ' + domainActivate.body?.entitlements?.domainCount + '/' + domainActivate.body?.entitlements?.maxDomains);
+  console.log('\n=== 7. 域名授权（独立体系，不需要授权码）===');
+  const dl = await call('/api/admin/domain-licenses', { token: adminToken, body: {
+    productId, planId, customerEmail: 'buyer@acceptance.local',
+    domains: ['https://www.Shop.Acceptance.com:8443/admin'],
+  } });
+  check('直接给域名发授权（无需授权码）', dl.status === 201 && dl.body.addedDomains.length === 1,
+    (dl.body.addedDomains ?? []).join(','));
+  check('域名自动归一化', dl.body.addedDomains?.[0] === 'shop.acceptance.com');
+  check('域名授权不含任何授权码', !JSON.stringify(dl.body).includes('keyFormatted'));
 
-  const subCheck = await call('/api/v1/verify-domain', { headers: { 'X-Api-Key': apiKey },
-    body: { licenseKey, domain: 'new.shop.acceptance.com' } });
-  check('子域名被授权覆盖', subCheck.body?.valid === true);
+  const dact = await call('/api/v1/domain/activate', { headers: { 'X-Api-Key': apiKey },
+    body: { domain: 'shop.acceptance.com', product: 'acceptance-app' } });
+  check('网站只凭域名即可激活并拿到签名文件',
+    dact.status === 201 && dact.body.licenseFile?.type === 'domain' && dact.body.licenseFile?.sig,
+    '额度 ' + dact.body?.entitlements?.domainCount + '/' + dact.body?.entitlements?.maxDomains);
 
-  const foreignDomain = await call('/api/v1/verify-domain', { headers: { 'X-Api-Key': apiKey },
-    body: { licenseKey, domain: 'evil-acceptance.com' } });
-  check('未授权域名被拒绝', foreignDomain.body?.valid === false, String(foreignDomain.body?.reason));
+  const dsub = await call('/api/v1/domain/verify', { headers: { 'X-Api-Key': apiKey },
+    body: { domain: 'new.shop.acceptance.com' } });
+  check('子域名被授权覆盖', dsub.body?.valid === true);
 
-  const domainLimit = await call('/api/v1/activate-domain', { headers: { 'X-Api-Key': apiKey },
-    body: { licenseKey, domain: 'second.acceptance.com' } });
-  const overLimit = await call('/api/v1/activate-domain', { headers: { 'X-Api-Key': apiKey },
-    body: { licenseKey, domain: 'third.acceptance.com' } });
-  check('域名额度用满后拒绝新域名', domainLimit.status === 201 && overLimit.status === 409
-    && overLimit.body?.code === 'DOMAIN_LIMIT_REACHED');
+  const dforeign = await call('/api/v1/domain/verify', { headers: { 'X-Api-Key': apiKey },
+    body: { domain: 'evil-acceptance.com' } });
+  check('未授权域名被拒绝', dforeign.body?.valid === false, String(dforeign.body?.reason));
 
-  const domainOff = await call('/api/v1/deactivate-domain', { headers: { 'X-Api-Key': apiKey },
-    body: { licenseKey, domain: 'second.acceptance.com', reason: '验收结束' } });
-  check('域名解绑后释放额度', domainOff.status === 201 && domainOff.body?.domainCount === 1);
+  const dlimit = await call('/api/admin/domain-licenses/' + dl.body.license.id + '/domains',
+    { token: adminToken, body: { domain: 'second.acceptance.com' } });
+  const dover = await call('/api/admin/domain-licenses/' + dl.body.license.id + '/domains',
+    { token: adminToken, body: { domain: 'third.acceptance.com' } });
+  check('域名额度用满后拒绝新域名', dlimit.status === 201 && dover.status === 409 && dover.body?.code === 'DOMAIN_LIMIT_REACHED');
 
-  const domainList = await call('/api/admin/licenses/' + licenseId + '/domains', { method: 'GET', token: adminToken });
-  const activeDomains = (domainList.body ?? []).filter((row) => row.status === 'active');
-  check('管理端可见域名绑定列表', activeDomains.length === 1 && activeDomains[0].domain === 'shop.acceptance.com');
+  const ddup = await call('/api/admin/domain-licenses', { token: adminToken, body: {
+    productId, planId, domains: ['second.acceptance.com'],
+  } });
+  check('同一域名不能被两张授权占用',
+    ddup.body?.failedDomains?.[0]?.message?.includes('占用') === true, ddup.body?.failedDomains?.[0]?.message);
 
+  const doff = await call('/api/v1/domain/deactivate', { headers: { 'X-Api-Key': apiKey },
+    body: { domain: 'second.acceptance.com', reason: '验收结束' } });
+  check('域名解绑释放额度', doff.status === 201 && doff.body?.domainCount === 1);
+
+  const dlist = await call('/api/admin/domain-licenses/' + dl.body.license.id, { method: 'GET', token: adminToken });
+  const activeDomains = (dlist.body.domains ?? []).filter((row) => row.status === 'active');
+  check('管理端可见域名列表与事件流',
+    activeDomains.length === 1 && activeDomains[0].domain === 'shop.acceptance.com' && dlist.body.events.length > 0,
+    '事件 ' + (dlist.body.events ?? []).map((row) => row.type).join(','));
   console.log('\n=== 8. 到期提醒（定时任务）===');
   // 7 天后（站点时区当天中午），避免因运行时刻接近零点而落到第 8 天
   const soon = siteDatePlusDays(7) + 'T04:00:00.000Z';

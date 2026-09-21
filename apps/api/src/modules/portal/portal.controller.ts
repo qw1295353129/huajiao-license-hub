@@ -57,16 +57,6 @@ export class PortalController {
     return this.portal.unbindDevice(user.id, licenseId, activationId);
   }
 
-  @Delete('licenses/:id/domains/:domainId')
-  @ApiOperation({ summary: '自助解绑域名（换站点时使用）' })
-  unbindDomain(
-    @CurrentUser() user: RequestUser,
-    @Param('id') licenseId: string,
-    @Param('domainId') domainId: string,
-  ) {
-    return this.portal.unbindDomain(user.id, licenseId, domainId);
-  }
-
   @Get('orders')
   @ApiOperation({ summary: '我的订单' })
   orders(@CurrentUser() user: RequestUser, @Query() query: ListMyOrdersDto) {

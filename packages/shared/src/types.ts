@@ -24,11 +24,37 @@ export interface LicenseFile {
   sig: string;
 }
 
+/** 域名授权的授权文件（与设备授权文件分开，字段不同、语义也不同） */
+export interface DomainLicenseFile {
+  v: 1;
+  kid: string;
+  type: 'domain';
+  domainLicenseId: string;
+  product: string;
+  plan: string;
+  customer: string | null;
+  /** 本次授权对应的站点域名 */
+  domain: string;
+  allowSubdomains: boolean;
+  issuedAt: string;
+  validFrom: string;
+  expiresAt: string | null;
+  perpetual: boolean;
+  features: string[];
+  maxDomains: number;
+  usedDomains: number;
+  offlineGraceDays: number;
+  nonce: string;
+  sig: string;
+}
+
 export interface Entitlements {
   valid: boolean;
   reason?: VerifyResult;
   message?: string;
   licenseId?: string;
+  /** 域名授权时返回 */
+  domainLicenseId?: string;
   product?: string;
   plan?: string;
   status?: LicenseStatus;
