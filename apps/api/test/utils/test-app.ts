@@ -16,7 +16,7 @@ export async function createTestApp(): Promise<TestContext> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication<NestFastifyApplication>(
     new FastifyAdapter({ genReqId: () => randomUUID() }),
-    { logger: false },
+    { logger: false, rawBody: true },
   );
   configureApp(app, loadConfig());
   await app.init();

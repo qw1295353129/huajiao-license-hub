@@ -28,6 +28,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@license-hub/shared": [
+        "../../packages/shared/src/index.ts"
       ]
     }
   },

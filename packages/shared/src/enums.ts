@@ -45,7 +45,7 @@ export const ROLE_RANK: Record<AdminRole, number> = { readonly: 1, support: 2, a
 export const ORDER_STATUSES = ['pending', 'paid', 'cancelled', 'refunded'] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-export const ORDER_PROVIDERS = ['manual', 'redeem', 'stripe', 'webhook', 'coupon'] as const;
+export const ORDER_PROVIDERS = ['manual', 'redeem', 'stripe', 'webhook', 'coupon', 'generic'] as const;
 export type OrderProvider = (typeof ORDER_PROVIDERS)[number];
 
 export const COUPON_TYPES = ['percent', 'fixed'] as const;

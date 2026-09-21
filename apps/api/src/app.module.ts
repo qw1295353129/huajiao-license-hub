@@ -9,6 +9,13 @@ import { DbModule } from './db/db.module';
 import { ActivationModule } from './modules/activation/activation.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
+import { CustomersModule } from './modules/customers/customers.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { PortalModule } from './modules/portal/portal.module';
+import { RedeemModule } from './modules/redeem/redeem.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuditController } from './modules/audit/audit.controller';
 import { AuthModule } from './modules/auth/auth.module';
@@ -28,6 +35,13 @@ import { HealthModule } from './modules/health/health.module';
     LicensesModule,
     ApiKeysModule,
     ActivationModule,
+    SettingsModule,
+    NotificationsModule,
+    CustomersModule,
+    RedeemModule,
+    OrdersModule,
+    CouponsModule,
+    PortalModule,
     HealthModule,
   ],
   controllers: [AuditController],

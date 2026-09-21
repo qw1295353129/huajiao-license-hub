@@ -21,6 +21,8 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
     logger: config.isProd ? ['error', 'warn', 'log'] : ['error', 'warn', 'log', 'debug'],
+    // 保留原始请求体：支付回调的 HMAC 验签必须基于「收到的字节」而不是重新序列化的 JSON
+    rawBody: true,
   });
 
   configureApp(app, config);
