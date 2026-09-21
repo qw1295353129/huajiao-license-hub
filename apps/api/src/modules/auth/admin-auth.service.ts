@@ -78,6 +78,78 @@ export class AdminAuthService implements OnApplicationBootstrap {
     return row;
   }
 
+  /* ------------------------------------------------ 团队与角色（仅 owner） */
+
+  async listAdmins() {
+    const rows = await this.db.select({
+      id: admins.id,
+      email: admins.email,
+      name: admins.name,
+      role: admins.role,
+      status: admins.status,
+      totpEnabled: admins.totpEnabled,
+      lastLoginAt: admins.lastLoginAt,
+      lastLoginIp: admins.lastLoginIp,
+      createdAt: admins.createdAt,
+    }).from(admins).orderBy(admins.createdAt);
+    return rows;
+  }
+
+  async updateAdmin(id: string, patch: { name?: string; role?: AdminRole; status?: 'active' | 'disabled' }, actorId: string) {
+    const [target] = await this.db.select().from(admins).where(eq(admins.id, id)).limit(1);
+    if (!target) throw AppError.notFound('管理员不存在');
+
+    // 不允许把自己降级或停用，避免把唯一 owner 锁在门外
+    if (id === actorId && (patch.role !== undefined && patch.role !== target.role || patch.status === 'disabled')) {
+      throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '不能修改自己的角色或停用自己的账号');
+    }
+    if (target.role === 'owner' && patch.role && patch.role !== 'owner') {
+      const owners = await this.db.select({ id: admins.id }).from(admins)
+        .where(and(eq(admins.role, 'owner'), eq(admins.status, 'active')));
+      if (owners.length <= 1) throw AppError.conflict('系统必须保留至少一个 owner');
+    }
+
+    const [row] = await this.db.update(admins).set({
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.role !== undefined ? { role: patch.role } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      updatedAt: new Date(),
+    }).where(eq(admins.id, id)).returning();
+
+    // 停用账号时立即吊销其全部会话
+    if (patch.status === 'disabled') {
+      await this.tokens.revokeAll('admin', id);
+    }
+    await this.audit.record({
+      actorType: 'admin',
+      actorId,
+      action: 'admin.update',
+      targetType: 'admin',
+      targetId: id,
+      diff: { before: { role: target.role, status: target.status, name: target.name }, after: patch },
+    });
+    return { id: row.id, email: row.email, name: row.name, role: row.role, status: row.status };
+  }
+
+  /** 管理员重置他人密码：生成随机密码并强制其重新登录。 */
+  async resetAdminPassword(id: string, actorId: string) {
+    const [target] = await this.db.select().from(admins).where(eq(admins.id, id)).limit(1);
+    if (!target) throw AppError.notFound('管理员不存在');
+    const password = 'Lh-' + this.crypto.randomToken(9);
+    await this.db.update(admins)
+      .set({ passwordHash: this.crypto.hashPassword(password), updatedAt: new Date() })
+      .where(eq(admins.id, id));
+    await this.tokens.revokeAll('admin', id);
+    await this.audit.record({
+      actorType: 'admin',
+      actorId,
+      action: 'admin.reset_password',
+      targetType: 'admin',
+      targetId: id,
+    });
+    return { ok: true, password };
+  }
+
   async login(input: { email: string; password: string; totp?: string; ip?: string; userAgent?: string }): Promise<LoginResult> {
     const email = input.email.trim().toLowerCase();
     const [admin] = await this.db.select().from(admins).where(eq(admins.email, email)).limit(1);

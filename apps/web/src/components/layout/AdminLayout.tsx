@@ -5,7 +5,7 @@ import {
 } from '@heroui/react';
 import {
   BarChart3, Boxes, FileClock, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings,
-  Ticket, Users, Webhook, X,
+  ShieldCheck, Ticket, Users, Webhook, X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/admin/webhooks', label: 'Webhook', icon: Webhook },
   { to: '/admin/audit', label: '审计日志', icon: FileClock },
   { to: '/admin/settings', label: '设置', icon: Settings },
+  { to: '/admin/team', label: '团队', icon: ShieldCheck },
 ];
 
 export function AdminLayout() {

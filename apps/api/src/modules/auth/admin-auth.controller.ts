@@ -1,9 +1,25 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Audit, Audience, ClientIp, CurrentUser, Public, Roles, UserAgent } from '../../common/decorators';
 import type { RequestUser } from '../../common/auth-context';
 import { AdminAuthService } from './admin-auth.service';
-import { ChangePasswordDto, DisableTotpDto, EnableTotpDto, LoginDto, RefreshDto } from './dto';
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ADMIN_ROLES, type AdminRole } from '@license-hub/shared';
+import { BootstrapAdminDto, ChangePasswordDto, DisableTotpDto, EnableTotpDto, LoginDto, RefreshDto } from './dto';
+
+class UpdateAdminDto {
+  @IsOptional() @IsString() @MaxLength(60) name?: string;
+  @IsOptional() @IsIn(ADMIN_ROLES) role?: AdminRole;
+  @IsOptional() @IsIn(['active', 'disabled']) status?: 'active' | 'disabled';
+}
+
+class CreateAdminDto extends BootstrapAdminDto {
+  @IsOptional() @IsIn(ADMIN_ROLES) declare role?: AdminRole;
+}
+
+class ResetAdminPasswordDto {
+  @IsOptional() @IsString() @MinLength(8) @MaxLength(128) newPassword?: string;
+}
 
 @ApiTags('admin/auth')
 @ApiBearerAuth('admin')
@@ -83,6 +99,54 @@ export class AdminAuthController {
   @Roles('support')
   @ApiOperation({ summary: '角色列表（示例：需要 support 及以上）' })
   roles() {
-    return { roles: ['owner', 'admin', 'support', 'readonly'] };
+    return {
+      roles: ADMIN_ROLES,
+      matrix: {
+        owner: '全部权限，含团队管理与签名密钥轮换',
+        admin: '业务全权：产品、授权、订单、卡密、Webhook、客户',
+        support: '只读 + 查看明文授权码以外的查询能力',
+        readonly: '仅只读',
+      },
+    };
+  }
+
+  /* ---------------- 团队管理（仅 owner） ---------------- */
+
+  @Get('team')
+  @Roles('owner')
+  @ApiOperation({ summary: '管理员列表' })
+  team() {
+    return this.auth.listAdmins();
+  }
+
+  @Post('team')
+  @Roles('owner')
+  @Audit({ action: 'admin.create', targetType: 'admin', recordBody: false })
+  @ApiOperation({ summary: '新增管理员（可指定角色）' })
+  createAdmin(@Body() dto: CreateAdminDto, @CurrentUser() user: RequestUser) {
+    return this.auth.createAdmin({
+      email: dto.email,
+      password: dto.password,
+      name: dto.name,
+      role: dto.role ?? 'admin',
+      actorId: user.id,
+      actorLabel: user.email,
+    });
+  }
+
+  @Patch('team/:id')
+  @Roles('owner')
+  @Audit({ action: 'admin.update', targetType: 'admin', recordBody: false })
+  @ApiOperation({ summary: '修改管理员角色 / 停用启用' })
+  updateAdmin(@Param('id') id: string, @Body() dto: UpdateAdminDto, @CurrentUser() user: RequestUser) {
+    return this.auth.updateAdmin(id, dto, user.id);
+  }
+
+  @Post('team/:id/reset-password')
+  @Roles('owner')
+  @Audit({ action: 'admin.reset_password', targetType: 'admin', recordBody: false })
+  @ApiOperation({ summary: '重置管理员密码（返回一次性随机密码）' })
+  resetAdminPassword(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.auth.resetAdminPassword(id, user.id);
   }
 }

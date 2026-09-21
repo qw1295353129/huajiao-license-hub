@@ -13,6 +13,7 @@ import { DevicesPage } from '@/pages/DevicesPage';
 import { WebhooksPage } from '@/pages/WebhooksPage';
 import { AuditPage } from '@/pages/AuditPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { TeamPage } from '@/pages/TeamPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { PortalLayout } from '@/portal/PortalLayout';
 import { PortalLoginPage } from '@/portal/PortalLoginPage';
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="webhooks" element={<WebhooksPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="team" element={<TeamPage />} />
       </Route>
 
       {/* 用户门户 */}
