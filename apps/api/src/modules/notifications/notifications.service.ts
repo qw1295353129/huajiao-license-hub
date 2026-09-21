@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { desc, eq } from 'drizzle-orm';
+import { count, desc, eq } from 'drizzle-orm';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { DB } from '../../db/db.module';
@@ -93,7 +93,7 @@ export class NotificationsService {
     const items = await this.handle.db.select().from(emailLogs)
       .orderBy(desc(emailLogs.createdAt))
       .limit(pageSize).offset(offset);
-    const all = await this.handle.db.select({ id: emailLogs.id }).from(emailLogs);
-    return { items, total: all.length, page, pageSize };
+    const [totalRow] = await this.handle.db.select({ value: count() }).from(emailLogs);
+    return { items, total: Number(totalRow?.value ?? 0), page, pageSize };
   }
 }

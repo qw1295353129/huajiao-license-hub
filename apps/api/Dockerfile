@@ -34,8 +34,12 @@ ENV NODE_ENV=production \
     AUTO_MIGRATE=true
 
 WORKDIR /app
-# 运行期需要：编译产物、迁移 SQL、生产依赖
+# 运行期需要：编译产物、迁移 SQL、生产依赖。
+# ⚠️ 必须连同各 workspace 包的 node_modules 一起拷贝：
+# pnpm 使用符号链接布局，apps/api/node_modules/* 指向 ../../../node_modules/.pnpm/*，
+# 只拷根 node_modules 会让 require('dotenv') 之类的解析在容器里直接失败（曾由 scripts/check-runtime-bundle.mjs 发现）。
 COPY --from=builder --chown=licensehub:licensehub /app/node_modules ./node_modules
+COPY --from=builder --chown=licensehub:licensehub /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=licensehub:licensehub /app/package.json ./package.json
 COPY --from=builder --chown=licensehub:licensehub /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=builder --chown=licensehub:licensehub /app/packages/shared/package.json ./packages/shared/package.json

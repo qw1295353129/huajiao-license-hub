@@ -8,7 +8,7 @@ import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { CryptoService } from '../../crypto/crypto.service';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
-import { licenseActivations, licenseEvents, licenses, plans, products } from '../../db/schema';
+import { customers, licenseActivations, licenseEvents, licenses, plans, products } from '../../db/schema';
 import { AppError, ErrorCodes } from '../../common/errors';
 import { normalizePaging, type PageResult } from '../../common/pagination';
 import { ProductsService } from '../products/products.service';
@@ -120,12 +120,25 @@ export class LicensesService {
     });
   }
 
+  /**
+   * 按邮箱解析客户账号。
+   * 关键点：授权一旦带上客户邮箱，就应同时写入 customer_id —— 否则用户登录后
+   * 在门户里看不到自己刚兑换/购买到的授权（曾出现：卡密兑换后门户 404）。
+   */
+  private async resolveCustomerId(email: string | null | undefined): Promise<string | null> {
+    if (!email) return null;
+    const [row] = await this.db.select({ id: customers.id }).from(customers)
+      .where(eq(customers.email, email.trim().toLowerCase())).limit(1);
+    return row?.id ?? null;
+  }
+
   private buildValues(input: {
     productId: string;
     planId: string;
     plan: typeof plans.$inferSelect;
     rawKey: string;
     customerEmail?: string | null;
+    customerId?: string | null;
     expiresAt: Date | null;
     maxDevices?: number;
     featureKeys?: string[];
@@ -144,6 +157,7 @@ export class LicensesService {
       keyMasked: maskLicenseKey(normalized),
       status: 'issued' as const,
       customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
+      customerId: input.customerId ?? null,
       maxDevices: input.maxDevices ?? input.plan.maxDevices,
       validFrom: new Date(),
       expiresAt: input.expiresAt,
@@ -170,12 +184,15 @@ export class LicensesService {
     }
 
     const rawKey = dto.key ? normalizeLicenseKey(dto.key) : this.crypto.generateCode(16);
+    // 有邮箱就尝试关联到已注册客户，让用户在门户立刻看到授权
+    const customerId = await this.resolveCustomerId(dto.customerEmail);
     const values = this.buildValues({
       productId: dto.productId,
       planId: plan.id,
       plan,
       rawKey,
       customerEmail: dto.customerEmail,
+      customerId,
       expiresAt: this.computeExpiry(plan, dto.expiresAt, dto.durationDays),
       maxDevices: dto.maxDevices,
       featureKeys: dto.featureKeys,

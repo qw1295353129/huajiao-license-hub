@@ -84,13 +84,45 @@ if (res.ok) {
 }
 ~~~
 
-常用命令：
+## 验证（全部可在无 Docker、无 PostgreSQL 的机器上跑）
 
 ~~~bash
-pnpm typecheck                              # 全仓类型检查
-pnpm --filter @license-hub/api test:all     # 单元 + e2e（自动建库迁移，无需外部依赖）
-pnpm --filter @license-hub/web build        # 前端生产构建
+pnpm typecheck                                   # 全仓类型检查
+pnpm --filter @license-hub/api test:all          # 单元 + e2e：84 项
+node scripts/acceptance.mjs                      # 端到端验收：全新数据库跑通全部业务流程（42 项）
+node scripts/check-docker-config.mjs             # Dockerfile / compose 静态一致性
+node scripts/check-runtime-bundle.mjs            # 复现镜像文件布局，验证迁移与启动可用
+node scripts/ui-smoke.cjs                        # 浏览器冒烟（管理端 10 页）
+node scripts/portal-smoke.cjs                    # 浏览器冒烟（用户门户）
+node sdk/demo.mjs <API_KEY> <LICENSE_KEY>        # 客户端接入演示
 ~~~
+
+### 验收覆盖（scripts/acceptance.mjs，42 项）
+
+首次启动自动建表 + 引导管理员 → 上架产品/策略 → 生成卡密并导出 CSV → 客户注册兑换 →
+客户端激活（Ed25519 验签 + 篡改拒绝）→ 心跳续期 → 设备超限拒绝 → 门户自助解绑换机 →
+到期提醒（幂等）→ 续费延期 → 订单支付自动发码 → 退款吊销 → Webhook 投递与消费方验签 →
+到期自动失效 → 看板/审计/待办 → 安全边界（未登录/错 Key/受众隔离/越权 404）。
+
+### Docker 部署验证说明
+
+本机没有 Docker 守护进程，因此**未执行真实 image build**。已用两种方式逼近验证：
+
+1. §check-docker-config.mjs§：Dockerfile 中每个 COPY 源路径真实存在，compose 的服务依赖、卷、
+   迁移作业命令与 Dockerfile 一致；
+2. §check-runtime-bundle.mjs§：按 Dockerfile 运行阶段的 COPY 清单复制出同样的文件布局，
+   在其中执行迁移作业并启动 API、登录、建产品 —— 这一步真实发现了「镜像缺少
+   §apps/api/node_modules§ 导致容器启动即崩」的问题（pnpm 符号链接布局所致），已修复。
+
+在有 Docker 的机器上，请执行：
+
+~~~bash
+cd deploy && cp .env.example .env   # 替换全部 CHANGE_ME
+docker compose up -d --build
+docker compose logs -f api          # 看到 "LicenseHub API 已启动" 即成功
+~~~
+
+常用命令：
 
 ## 文档
 
