@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Button, Card, Input, Label, FieldError, TextField, toast } from '@heroui/react';
 import { ShieldCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api';
@@ -15,9 +15,8 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (user) {
-    navigate('/admin', { replace: true });
-  }
+  // 已登录直接跳转：必须用 <Navigate>，不能在渲染期间调用 navigate（React 会报 setState-in-render 警告）
+  if (user) return <Navigate to="/admin" replace />;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

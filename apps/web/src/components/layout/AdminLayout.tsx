@@ -109,13 +109,12 @@ export function AdminLayout() {
             <span className="text-sm opacity-50">个人运营控制台</span>
           </div>
           <Dropdown>
-            <Dropdown.Trigger>
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Avatar className="size-6">
-                  <Avatar.Fallback>{(user?.name ?? 'A').slice(0, 1)}</Avatar.Fallback>
-                </Avatar>
-                <span className="hidden text-sm sm:inline">{user?.name ?? '未登录'}</span>
-              </Button>
+            {/* Dropdown.Trigger 自身就是 <button>，再套 <Button> 会产生非法嵌套（浏览器会警告 + 行为异常） */}
+            <Dropdown.Trigger className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/8">
+              <Avatar className="size-6">
+                <Avatar.Fallback>{(user?.name ?? 'A').slice(0, 1)}</Avatar.Fallback>
+              </Avatar>
+              <span className="hidden sm:inline">{user?.name ?? '未登录'}</span>
             </Dropdown.Trigger>
             <Dropdown.Popover placement="bottom end">
               <Dropdown.Menu>
