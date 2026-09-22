@@ -156,6 +156,9 @@ export function LicensesPage() {
                 <Dropdown.Item id="revoke" onAction={() => void revokeWithConfirm(row.id, refresh)}>
                   <Trash2 size={13} /> 吊销授权
                 </Dropdown.Item>
+                <Dropdown.Item id="delete" onAction={() => void deleteLicense(row, refresh)}>
+                  <Trash2 size={13} /> 删除授权码
+                </Dropdown.Item>
               </Dropdown.Menu>
             </Dropdown.Popover>
           </Dropdown>
@@ -295,6 +298,26 @@ async function transition(id: string, action: 'revoke' | 'suspend' | 'resume' | 
     refresh();
   } catch (error) {
     toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+  }
+}
+
+/**
+ * 删除授权码（不可恢复）。与「吊销」的区别：吊销保留记录可追溯，删除是彻底清理（测试码/误发码）。
+ */
+async function deleteLicense(row: LicenseRow, refresh: () => void) {
+  const confirmed = window.confirm(
+    '彻底删除授权码 ' + row.keyMasked + '？\n\n' +
+    '· 删除后无法恢复，设备绑定与事件一并清除\n' +
+    '· 如果只是想让它失效，请用「吊销」而不是删除\n\n' +
+    '确认删除吗？',
+  );
+  if (!confirmed) return;
+  try {
+    await api.delete('/api/admin/licenses/' + row.id);
+    toast.success('已删除 ' + row.keyMasked);
+    refresh();
+  } catch (error) {
+    toast.danger('删除失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 

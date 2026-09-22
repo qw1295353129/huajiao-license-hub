@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button, Chip, Input, Label, ListBox, Modal, Select, TextArea, TextField, toast,
 } from '@heroui/react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { Paginated, ProductDetail, ProductRow } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
@@ -52,9 +52,29 @@ export function ProductsPage() {
     {
       id: 'actions', label: '操作', align: 'right',
       render: (row) => (
-        <Button size="sm" variant="ghost" onPress={() => setDetailId(row.id)}>
-          策略与功能
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          <Button size="sm" variant="ghost" onPress={() => setDetailId(row.id)}>
+            策略与功能
+          </Button>
+          <Button
+            size="sm"
+            variant="danger-soft"
+            onPress={async () => {
+              if (!window.confirm('删除产品「' + row.name + '」？\n\n只有该产品下没有任何授权时才能删除；否则会提示你先归档。')) return;
+              try {
+                const res = await api.post<{ deleted?: boolean; archived?: boolean; reason?: string }>(
+                  '/api/admin/products/' + row.id + '/delete', {});
+                if (res.deleted) toast.success('产品已删除');
+                else toast.warning('已改为归档', { description: res.reason });
+                void queryClient.invalidateQueries({ queryKey: ['products'] });
+              } catch (error) {
+                toast.danger('无法删除', { description: error instanceof Error ? error.message : '', timeout: 0 });
+              }
+            }}
+          >
+            <Trash2 size={13} /> 删除
+          </Button>
+        </div>
       ),
     },
   ];
@@ -107,7 +127,28 @@ export function ProductsPage() {
                           <div key={plan.id} className="rounded-lg border border-black/8 p-3 dark:border-white/10">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-medium">{plan.name}</span>
-                              <Tag color={plan.status === 'active' ? 'success' : 'default'}>{plan.code}</Tag>
+                              <div className="flex items-center gap-2">
+                                <Tag color={plan.status === 'active' ? 'success' : 'default'}>{plan.code}</Tag>
+                                <Button
+                                  size="sm"
+                                  variant="danger-soft"
+                                  onPress={async () => {
+                                    if (!window.confirm('删除策略「' + plan.name + '」？没有授权使用时会真删，否则改为归档。')) return;
+                                    try {
+                                      const res = await api.post<{ deleted: boolean; reason?: string }>(
+                                        '/api/admin/plans/' + plan.id + '/delete', {});
+                                      toast.success(res.deleted ? '策略已删除' : '已改为归档', {
+                                        description: res.reason,
+                                      });
+                                      void queryClient.invalidateQueries({ queryKey: ['product', detailId] });
+                                    } catch (error) {
+                                      toast.danger('删除失败', { description: error instanceof Error ? error.message : '' });
+                                    }
+                                  }}
+                                >
+                                  删除
+                                </Button>
+                              </div>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] opacity-60">
                               <span>{LICENSE_TYPE_LABEL[plan.licenseType] ?? plan.licenseType}</span>

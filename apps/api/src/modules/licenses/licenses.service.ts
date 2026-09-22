@@ -11,6 +11,7 @@ import type { DatabaseHandle } from '../../db/db.provider';
 import { customers, licenseActivations, licenseEvents, licenses, plans, products } from '../../db/schema';
 import { AppError, ErrorCodes } from '../../common/errors';
 import { normalizePaging, type PageResult } from '../../common/pagination';
+import { AuditService } from '../audit/audit.service';
 import { ProductsService } from '../products/products.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { parseCsv, toCsv } from './csv';
@@ -62,6 +63,7 @@ export class LicensesService {
     private readonly crypto: CryptoService,
     private readonly products: ProductsService,
     private readonly webhooks: WebhooksService,
+    private readonly audit: AuditService,
   ) {}
 
   private get db() {
@@ -674,6 +676,49 @@ export class LicensesService {
       ))
       .returning({ id: licenses.id });
     return rows.length;
+  }
+
+  /**
+   * 删除授权码（物理删除）。
+   * 仅 owner/admin 可用，且会在审计日志留痕；设备绑定与事件随外键级联删除。
+   * 适用于清理测试码 / 误发的码；已产生订单的授权建议用「吊销」而不是删除。
+   */
+  async remove(id: string, actor: { id?: string; email?: string }): Promise<{ ok: true; keyMasked: string }> {
+    const current = await this.get(id);
+    await this.db.delete(licenses).where(eq(licenses.id, id));
+    await this.auditDelete(id, current, actor);
+    return { ok: true, keyMasked: current.keyMasked };
+  }
+
+  /** 批量删除（按 id 数组），返回成功与失败明细。 */
+  async removeMany(ids: string[], actor: { id?: string; email?: string }) {
+    const deleted: string[] = [];
+    const failed: { id: string; message: string }[] = [];
+    for (const id of ids) {
+      try {
+        const current = await this.db.select({ keyMasked: licenses.keyMasked }).from(licenses).where(eq(licenses.id, id)).limit(1);
+        if (current.length === 0) { failed.push({ id, message: '不存在' }); continue; }
+        await this.db.delete(licenses).where(eq(licenses.id, id));
+        deleted.push(current[0].keyMasked);
+      } catch (error) {
+        failed.push({ id, message: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    void actor;
+    return { ok: true, deletedCount: deleted.length, deleted, failed };
+  }
+
+  /** 删除是不可逆操作，单独记一条审计（不走拦截器，便于批量删除时逐条留痕）。 */
+  private async auditDelete(id: string, snapshot: LicenseView, actor: { id?: string; email?: string }): Promise<void> {
+    await this.audit.record({
+      actorType: 'admin',
+      actorId: actor.id ?? null,
+      actorEmail: actor.email ?? null,
+      action: 'license.delete',
+      targetType: 'license',
+      targetId: id,
+      diff: { before: { keyMasked: snapshot.keyMasked, status: snapshot.status, product: snapshot.productName, customerEmail: snapshot.customerEmail } },
+    });
   }
 
   async listActivations(licenseId: string) {

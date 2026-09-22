@@ -54,6 +54,14 @@ export class ProductsController {
     return this.products.archive(params.id);
   }
 
+  @Post('products/:id/delete')
+  @Roles('admin')
+  @Audit({ action: 'product.delete', targetType: 'product' })
+  @ApiOperation({ summary: '删除产品（无任何授权时真删，否则拒绝并提示归档）' })
+  remove(@Param() params: IdParamDto) {
+    return this.products.remove(params.id);
+  }
+
   /* ---------------- 策略 ---------------- */
 
   @Get('products/:id/plans')
@@ -85,6 +93,14 @@ export class ProductsController {
   @ApiOperation({ summary: '归档授权策略' })
   archivePlan(@Param() params: IdParamDto) {
     return this.products.archivePlan(params.id);
+  }
+
+  @Post('plans/:id/delete')
+  @Roles('admin')
+  @Audit({ action: 'plan.delete', targetType: 'plan' })
+  @ApiOperation({ summary: '删除授权策略（无授权使用时真删，否则归档）' })
+  removePlan(@Param() params: IdParamDto) {
+    return this.products.removePlan(params.id);
   }
 
   /* ---------------- 功能点 ---------------- */

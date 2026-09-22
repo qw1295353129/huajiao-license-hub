@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
-import { plans, productFeatures, productReleases, products } from '../../db/schema';
+import { licenses, plans, productFeatures, productReleases, products } from '../../db/schema';
 import { AppError, ErrorCodes } from '../../common/errors';
 import { normalizePaging, type PageResult } from '../../common/pagination';
 import type {
@@ -114,6 +114,47 @@ export class ProductsService {
       .where(eq(products.id, id))
       .returning();
     return row;
+  }
+
+  /**
+   * 删除产品：只有「没有任何授权」时才真正删除（连带策略/功能点/版本）。
+   * 一旦产生过授权，就只允许归档 —— 授权记录依赖外键，物理删除会造成悬空数据。
+   */
+  async remove(id: string): Promise<{ ok: true; deleted: true } | { ok: true; archived: true; reason: string }> {
+    await this.findById(id);
+    const [licenseCount] = await this.db.select({ value: count() }).from(licenses).where(eq(licenses.productId, id));
+    if (Number(licenseCount?.value ?? 0) > 0) {
+      throw AppError.conflict(
+        '该产品下还有 ' + licenseCount?.value + ' 条授权，无法删除。请先处理这些授权，或改为「归档」。',
+        { licenseCount: Number(licenseCount?.value ?? 0) },
+      );
+    }
+    try {
+      await this.db.delete(plans).where(eq(plans.productId, id));
+      await this.db.delete(products).where(eq(products.id, id));
+      return { ok: true, deleted: true };
+    } catch {
+      // 还有卡密批次 / 域名授权等引用：退回归档
+      await this.db.update(products).set({ status: 'archived', updatedAt: new Date() }).where(eq(products.id, id));
+      return { ok: true, archived: true, reason: '该产品仍被卡密批次或域名授权引用，已改为归档' };
+    }
+  }
+
+  /** 删除策略：没有授权使用时真删，否则归档。 */
+  async removePlan(planId: string): Promise<{ ok: true; deleted: boolean; reason?: string }> {
+    await this.findPlan(planId);
+    const [used] = await this.db.select({ value: count() }).from(licenses).where(eq(licenses.planId, planId));
+    if (Number(used?.value ?? 0) > 0) {
+      await this.db.update(plans).set({ status: 'archived', updatedAt: new Date() }).where(eq(plans.id, planId));
+      return { ok: true, deleted: false, reason: '已有 ' + used?.value + ' 条授权使用该策略，已改为归档' };
+    }
+    try {
+      await this.db.delete(plans).where(eq(plans.id, planId));
+      return { ok: true, deleted: true };
+    } catch {
+      await this.db.update(plans).set({ status: 'archived', updatedAt: new Date() }).where(eq(plans.id, planId));
+      return { ok: true, deleted: false, reason: '该策略仍被卡密批次或域名授权引用，已改为归档' };
+    }
   }
 
   /** 归档而不是物理删除：授权记录依赖外键，误删会造成悬空数据。 */

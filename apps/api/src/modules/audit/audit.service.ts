@@ -18,7 +18,10 @@ export function redact(value: unknown, depth = 0): unknown {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-     out[key] = SENSITIVE_KEYS.some((s) => key.toLowerCase().includes(s.toLowerCase()))
+      const lower = key.toLowerCase();
+      // 掩码类字段（keyMasked / codeMasked / key_prefix …）本身就是脱敏后的展示值，保留原样便于对账
+      const isMaskedField = lower.endsWith('masked') || lower.includes('mask');
+      out[key] = !isMaskedField && SENSITIVE_KEYS.some((s) => lower.includes(s.toLowerCase()))
         ? '***'
         : redact(val, depth + 1);
     }

@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Header, Param, Patch, Post, Query, Res,
+  Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
@@ -78,6 +78,23 @@ export class LicensesController {
   @ApiOperation({ summary: '授权详情（含生命周期事件）' })
   detail(@Param() params: IdParamDto) {
     return this.licenses.detail(params.id);
+  }
+
+  @Delete(':id')
+  @Roles('admin')
+  // 审计由 service 写入（含被删授权的快照），此处不再重复标注
+  @ApiOperation({ summary: '删除授权码（不可恢复，写审计）' })
+  remove(@Param() params: IdParamDto, @CurrentUser() user: RequestUser) {
+    return this.licenses.remove(params.id, { id: user.id, email: user.email });
+  }
+
+  @Post('batch-delete')
+  @Roles('admin')
+  @Audit({ action: 'license.batch_delete', targetType: 'license' })
+  @ApiOperation({ summary: '批量删除授权码（按 id 数组，最多 500 条）' })
+  removeMany(@Body() dto: { ids: string[] }, @CurrentUser() user: RequestUser) {
+    const ids = Array.isArray(dto?.ids) ? dto.ids.slice(0, 500) : [];
+    return this.licenses.removeMany(ids, { id: user.id, email: user.email });
   }
 
   @Get(':id/reveal')
