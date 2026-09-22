@@ -13,6 +13,7 @@ import { DevicesPage } from '@/pages/DevicesPage';
 import { WebhooksPage } from '@/pages/WebhooksPage';
 import { AuditPage } from '@/pages/AuditPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { ApiKeysPage } from '@/pages/ApiKeysPage';
 import { DomainLicensesPage } from '@/pages/DomainLicensesPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="orders" element={<OrdersPage />} />
         <Route path="redeem" element={<RedeemPage />} />
         <Route path="domains" element={<DomainLicensesPage />} />
+        <Route path="api-keys" element={<ApiKeysPage />} />
         <Route path="devices" element={<DevicesPage />} />
         <Route path="webhooks" element={<WebhooksPage />} />
         <Route path="audit" element={<AuditPage />} />
