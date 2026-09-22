@@ -73,6 +73,8 @@ license-hub/
 
 ## 客户端接入（三步）
 
+> 完整教程（含 Node/Python/C#/Go/PHP 示例、错误码处理、设备指纹建议）：[docs/CLIENT-INTEGRATION.md](docs/CLIENT-INTEGRATION.md)
+
 ~~~bash
 # 1) 后台创建 API Key（只显示一次明文），2) 后台创建一条授权，3) 跑演示
 node sdk/demo.mjs <API_KEY> <LICENSE_KEY> http://localhost:3000
@@ -151,5 +153,6 @@ docker compose logs -f api          # 看到 "LicenseHub API 已启动" 即成�
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 数据库表结构与状态机 |
 | [docs/API.md](docs/API.md) | 三类 API 全量端点 |
 | [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、密钥管理、授权码存储与签名 |
+| [docs/CLIENT-INTEGRATION.md](docs/CLIENT-INTEGRATION.md) | **客户端对接教程**（桌面软件 / 网站，含多语言验签示例） |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker 部署、备份、升级 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 里程碑与验收标准 |
