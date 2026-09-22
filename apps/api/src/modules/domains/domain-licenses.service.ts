@@ -9,6 +9,7 @@ import type { DatabaseHandle } from '../../db/db.provider';
 import { authorizedDomains, customers, domainEvents, domainLicenses, plans, products } from '../../db/schema';
 import { AppError, ErrorCodes } from '../../common/errors';
 import { normalizePaging } from '../../common/pagination';
+import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProductsService } from '../products/products.service';
 import { LicenseSignerService } from '../activation/license-signer.service';
@@ -60,6 +61,7 @@ export class DomainLicensesService {
     private readonly signer: LicenseSignerService,
     private readonly mail: NotificationsService,
     private readonly webhooks: WebhooksService,
+    private readonly audit: AuditService,
   ) {}
 
   private get db() {
@@ -401,11 +403,42 @@ export class DomainLicensesService {
     return this.get(id);
   }
 
+  /**
+   * 删除域名授权（不可恢复）：已授权域名与事件随外键级联删除。
+   * 想保留记录只让站点失效，请用 revoke/suspend 而不是删除。
+   */
   async remove(id: string, actor: { id?: string; email?: string }) {
+    const snapshot = await this.detail(id);
     const rows = await this.db.delete(domainLicenses).where(eq(domainLicenses.id, id)).returning({ id: domainLicenses.id });
     if (rows.length === 0) throw AppError.notFound('域名授权不存在');
-    void actor;
-    return { ok: true };
+
+    const activeDomains = snapshot.domains.filter((row) => row.status === 'active').map((row) => row.domain);
+    for (const domain of activeDomains) {
+      await this.webhooks.emit('domain.unbound', {
+        domainLicenseId: id,
+        domain,
+        reason: 'domain_license_deleted',
+        domainCount: 0,
+      }).catch(() => undefined);
+    }
+    await this.audit.record({
+      actorType: 'admin',
+      actorId: actor.id ?? null,
+      actorEmail: actor.email ?? null,
+      action: 'domain_license.delete',
+      targetType: 'domain_license',
+      targetId: id,
+      diff: {
+        before: {
+          product: snapshot.productName,
+          plan: snapshot.planCode,
+          customerEmail: snapshot.customerEmail,
+          status: snapshot.status,
+          releasedDomains: activeDomains,
+        },
+      },
+    });
+    return { ok: true, releasedDomains: activeDomains };
   }
 
   /* ------------------------------------------------ 域名绑定 */

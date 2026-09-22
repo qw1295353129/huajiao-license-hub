@@ -101,6 +101,9 @@ export function DomainLicensesPage() {
                 <Dropdown.Item id="revoke" onAction={() => void revoke(row.id, refresh)}>
                   <Trash2 size={13} /> 吊销授权
                 </Dropdown.Item>
+                <Dropdown.Item id="delete" onAction={() => void deleteDomainLicense(row, refresh)}>
+                  <Trash2 size={13} /> 删除域名授权
+                </Dropdown.Item>
               </Dropdown.Menu>
             </Dropdown.Popover>
           </Dropdown>
@@ -166,6 +169,31 @@ async function transition(id: string, action: 'revoke' | 'suspend' | 'resume', r
 async function revoke(id: string, refresh: () => void) {
   if (!window.confirm('吊销该域名授权？相关网站会立即失效。')) return;
   await transition(id, 'revoke', refresh);
+}
+
+/**
+ * 删除域名授权（不可恢复）。
+ * 与「吊销」的区别：吊销保留记录可追溯；删除会连同已授权域名一起清除。
+ */
+async function deleteDomainLicense(row: DomainLicenseRow, refresh: () => void) {
+  const active = row.domainCount;
+  const confirmed = window.confirm(
+    '删除域名授权？\n\n' +
+    '· 归属：' + (row.customerEmail ?? '未绑定客户') + '\n' +
+    '· 将释放 ' + active + ' 个已授权域名（这些网站会立即失效）\n' +
+    '· 删除后无法恢复；如果只是想让站点失效，请用「吊销」\n\n' +
+    '确认删除吗？',
+  );
+  if (!confirmed) return;
+  try {
+    const res = await api.delete<{ ok: boolean; releasedDomains: string[] }>('/api/admin/domain-licenses/' + row.id);
+    toast.success('已删除域名授权', {
+      description: res.releasedDomains.length > 0 ? '释放域名：' + res.releasedDomains.join('、') : undefined,
+    });
+    refresh();
+  } catch (error) {
+    toast.danger('删除失败', { description: error instanceof Error ? error.message : '' });
+  }
 }
 
 async function extend(id: string, days: number, refresh: () => void) {

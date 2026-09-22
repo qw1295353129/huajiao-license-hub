@@ -282,4 +282,27 @@ describe('域名授权（独立体系，不依赖授权码）e2e', () => {
     assert.equal(domainStats.status, 200);
     assert.equal(typeof domainStats.body.activeDomains, 'number');
   });
+
+  it('删除域名授权：连带释放域名、可再次授权、写审计快照', async () => {
+    const created = await request(server).post('/api/admin/domain-licenses').set(admin())
+      .send({ productId, planId, customerEmail: 'delete-me@example.com', domains: ['delete-me.example.com'] });
+    assert.equal(created.status, 201);
+    const id = created.body.license.id as string;
+
+    const del = await request(server).delete('/api/admin/domain-licenses/' + id).set(admin());
+    assert.equal(del.status, 200, JSON.stringify(del.body));
+    assert.deepEqual(del.body.releasedDomains, ['delete-me.example.com']);
+
+    const gone = await request(server).get('/api/admin/domain-licenses/' + id).set(admin());
+    assert.equal(gone.status, 404, '删除后应查不到');
+
+    const reuse = await request(server).post('/api/admin/domain-licenses').set(admin())
+      .send({ productId, planId, customerEmail: 'new-owner@example.com', domains: ['delete-me.example.com'] });
+    assert.equal(reuse.body.addedDomains.length, 1, '释放后的域名应可再次授权');
+
+    const audit = await request(server).get('/api/admin/audit-logs?action=domain_license.delete').set(admin());
+    const rows = audit.body.items as Array<{ diff?: { before?: { releasedDomains?: string[] } } }>;
+    const entry = rows.find((row) => (row.diff?.before?.releasedDomains ?? []).length > 0);
+    assert.ok(entry, '审计应记录被释放的域名快照');
+  });
 });
