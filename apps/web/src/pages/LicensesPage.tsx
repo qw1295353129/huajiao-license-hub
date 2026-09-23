@@ -190,7 +190,7 @@ export function LicensesPage() {
                     });
                     const res = await fetch(url, {
                       headers: {
-                        Authorization: 'Bearer ' + (JSON.parse(localStorage.getItem('licensehub.tokens') ?? '{}').accessToken ?? ''),
+                        Authorization: 'Bearer ' + (api.getTokens()?.accessToken ?? ''),
                       },
                     });
                     if (!res.ok) throw new Error('导出失败：' + res.status);

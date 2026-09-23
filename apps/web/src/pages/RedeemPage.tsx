@@ -104,8 +104,9 @@ export function RedeemPage() {
               // 导出走浏览器下载，带上 Authorization 头需要用 fetch + blob
               void (async () => {
                 try {
+                  const accessToken = api.getTokens()?.accessToken ?? '';
                   const res = await fetch('/api/admin/redeem/batches/' + row.id + '/export', {
-                    headers: { Authorization: 'Bearer ' + (JSON.parse(localStorage.getItem('licensehub.tokens') ?? '{}').accessToken ?? '') },
+                    headers: { Authorization: 'Bearer ' + accessToken },
                   });
                   if (!res.ok) throw new Error('导出失败：' + res.status);
                   const blob = await res.blob();

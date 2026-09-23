@@ -3,6 +3,12 @@ const { createServer } = require('node:http');
 const { createHmac } = require('node:crypto');
 
 const BASE = process.env.BASE || 'http://localhost:3000';
+const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(BASE);
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || (isLocal ? 'admin@licensehub.local' : null);
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (isLocal ? 'Admin@12345' : null);
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  throw new Error('非本机目标必须设置 ADMIN_EMAIL 与 ADMIN_PASSWORD（禁止默认口令打生产）');
+}
 const hits = [];
 
 async function call(path, body, token, method = 'POST') {
@@ -24,7 +30,7 @@ async function call(path, body, token, method = 'POST') {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
 
-  const login = await call('/api/admin/auth/login', { email: 'admin@licensehub.local', password: 'Admin@12345' });
+  const login = await call('/api/admin/auth/login', { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
   const token = login.body.tokens.accessToken;
 
   const created = await call('/api/admin/webhooks', {

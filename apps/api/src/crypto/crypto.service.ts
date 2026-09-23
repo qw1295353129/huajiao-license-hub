@@ -30,13 +30,23 @@ export class CryptoService {
     if (!stored) return false;
     const parts = stored.split('$');
     if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
-    const [, n, r, p, saltB64, hashB64] = parts;
-    const salt = Buffer.from(saltB64, 'base64');
-    const expected = Buffer.from(hashB64, 'base64');
-    const actual = scryptSync(password.normalize('NFKC'), salt, expected.length, {
-      N: Number(n), r: Number(r), p: Number(p),
-    });
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
+    const [, nRaw, rRaw, pRaw, saltB64, hashB64] = parts;
+    const n = Number(nRaw);
+    const r = Number(rRaw);
+    const p = Number(pRaw);
+    // 库中参数来自历史哈希：拒绝 NaN/超界值，避免恶意哈希拖垮 CPU（suggestion）
+    if (!Number.isInteger(n) || n < 2 || n > 1 << 20 || (n & (n - 1)) !== 0) return false;
+    if (!Number.isInteger(r) || r < 1 || r > 32) return false;
+    if (!Number.isInteger(p) || p < 1 || p > 16) return false;
+    try {
+      const salt = Buffer.from(saltB64, 'base64');
+      const expected = Buffer.from(hashB64, 'base64');
+      if (expected.length < 16 || expected.length > 128) return false;
+      const actual = scryptSync(password.normalize('NFKC'), salt, expected.length, { N: n, r, p });
+      return actual.length === expected.length && timingSafeEqual(actual, expected);
+    } catch {
+      return false;
+    }
   }
 
   /* ---------------- 对称加密（AES-256-GCM） ---------------- */

@@ -8,8 +8,12 @@ function loadPlaywright() {
 }
 const { chromium } = loadPlaywright();
 const BASE = process.env.WEB_URL || 'http://localhost:5273';
-const EMAIL = process.env.PORTAL_EMAIL || 'demo@example.com';
-const PASSWORD = process.env.PORTAL_PASSWORD || 'Demo12345';
+const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(BASE);
+const EMAIL = process.env.PORTAL_EMAIL || (isLocal ? 'demo@example.com' : null);
+const PASSWORD = process.env.PORTAL_PASSWORD || (isLocal ? 'Demo12345' : null);
+if (!EMAIL || !PASSWORD) {
+  throw new Error('非本机目标必须设置 PORTAL_EMAIL 与 PORTAL_PASSWORD');
+}
 const ROUTES = (process.env.ROUTES || '/portal/licenses,/portal/orders,/portal/redeem,/portal/account').split(',');
 
 (async () => {

@@ -12,8 +12,12 @@ function loadPlaywright() {
 }
 const { chromium } = loadPlaywright();
 const BASE = process.env.WEB_URL || 'http://localhost:5273';
-const EMAIL = process.env.ADMIN_EMAIL || 'admin@licensehub.local';
-const PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@12345';
+const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(BASE);
+const EMAIL = process.env.ADMIN_EMAIL || (isLocal ? 'admin@licensehub.local' : null);
+const PASSWORD = process.env.ADMIN_PASSWORD || (isLocal ? 'Admin@12345' : null);
+if (!EMAIL || !PASSWORD) {
+  throw new Error('非本机目标必须设置 ADMIN_EMAIL 与 ADMIN_PASSWORD（禁止默认口令打生产）');
+}
 const ROUTES = (process.env.ROUTES || '/admin,/admin/products,/admin/licenses').split(',');
 
 (async () => {

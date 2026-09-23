@@ -29,7 +29,7 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   if (config.swaggerEnabled) {
-    setupSwagger(app);
+    setupSwagger(app, { persistAuthorization: !config.isProd });
     logger.log('接口文档：http://localhost:' + config.port + '/docs');
   }
 

@@ -59,17 +59,28 @@ export function totpCode(secretBase32: string, timestampMs = Date.now(), step = 
   return hotp(base32Decode(secretBase32), Math.floor(timestampMs / 1000 / step), digits);
 }
 
-/** 校验动态码，window 表示允许前后多少个时间步（默认 ±1，即 ±30 秒）。 */
-export function verifyTotp(secretBase32: string, code: string, window = 1, timestampMs = Date.now()): boolean {
+/**
+ * 校验动态码，window 表示允许前后多少个时间步（默认 ±1，即 ±30 秒）。
+ * 返回命中的 counter（用于防重放），未命中返回 null。
+ */
+export function matchTotp(secretBase32: string, code: string, window = 1, timestampMs = Date.now()): number | null {
   const normalized = code.replace(/\s/g, '');
-  if (!/^\d{6}$/.test(normalized)) return false;
+  if (!/^\d{6}$/.test(normalized)) return null;
   const counter = Math.floor(timestampMs / 1000 / 30);
   const expected = Buffer.from(normalized);
+  const secret = base32Decode(secretBase32);
   for (let offset = -window; offset <= window; offset += 1) {
-    const candidate = Buffer.from(hotp(base32Decode(secretBase32), counter + offset));
-    if (candidate.length === expected.length && timingSafeEqual(candidate, expected)) return true;
+    const candidate = Buffer.from(hotp(secret, counter + offset));
+    if (candidate.length === expected.length && timingSafeEqual(candidate, expected)) {
+      return counter + offset;
+    }
   }
-  return false;
+  return null;
+}
+
+/** 兼容旧调用：只要是否通过。 */
+export function verifyTotp(secretBase32: string, code: string, window = 1, timestampMs = Date.now()): boolean {
+  return matchTotp(secretBase32, code, window, timestampMs) !== null;
 }
 
 export function otpauthUri(secretBase32: string, account: string, issuer: string): string {

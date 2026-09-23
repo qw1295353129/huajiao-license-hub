@@ -16,7 +16,7 @@ export function configureApp(app: INestApplication, config: AppConfig): void {
   app.useGlobalFilters(new AllExceptionsFilter());
 }
 
-export function setupSwagger(app: INestApplication): void {
+export function setupSwagger(app: INestApplication, options: { persistAuthorization?: boolean } = {}): void {
   const document = SwaggerModule.createDocument(app, new DocumentBuilder()
     .setTitle('LicenseHub API')
     .setDescription('软件授权管理系统 · 管理端 / 用户门户 / 客户端授权接口')
@@ -24,5 +24,8 @@ export function setupSwagger(app: INestApplication): void {
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'admin')
     .addApiKey({ type: 'apiKey', name: 'X-Api-Key', in: 'header' }, 'api-key')
     .build());
-  SwaggerModule.setup('docs', app, document, { swaggerOptions: { persistAuthorization: true } });
+  // 生产默认不把 Bearer 写入浏览器 localStorage（suggestion：persistAuthorization）
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: { persistAuthorization: options.persistAuthorization ?? false },
+  });
 }

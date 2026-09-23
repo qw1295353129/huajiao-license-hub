@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { AdminRole, SessionUser } from '@license-hub/shared';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { CryptoService } from '../../crypto/crypto.service';
-import { generateTotpSecret, otpauthUri, verifyTotp } from '../../crypto/totp';
+import { generateTotpSecret, matchTotp, otpauthUri } from '../../crypto/totp';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 import { admins } from '../../db/schema';
@@ -182,10 +182,20 @@ export class AdminAuthService implements OnApplicationBootstrap {
         throw new AppError(ErrorCodes.TWO_FACTOR_REQUIRED, '需要输入动态验证码', 401, { requires2fa: true });
       }
       const secret = admin.totpSecretEnc ? this.crypto.decrypt(admin.totpSecretEnc) : null;
-      if (!secret || !verifyTotp(secret, input.totp)) {
+      const totpCounter = secret ? matchTotp(secret, input.totp) : null;
+      // 防重放：同一 counter 在窗口内不得重复使用（suggestion）
+      if (totpCounter === null || (admin.totpLastCounter !== null && totpCounter <= admin.totpLastCounter)) {
         await this.registerFailure(admin);
-        throw new AppError(ErrorCodes.TWO_FACTOR_INVALID, '动态验证码不正确', 401, { requires2fa: true });
+        throw new AppError(
+          ErrorCodes.TWO_FACTOR_INVALID,
+          totpCounter === null ? '动态验证码不正确' : '动态验证码已使用，请等待下一时间步',
+          401,
+          { requires2fa: true },
+        );
       }
+      await this.db.update(admins)
+        .set({ totpLastCounter: totpCounter })
+        .where(eq(admins.id, admin.id));
     }
 
     await this.db.update(admins)
@@ -276,8 +286,12 @@ export class AdminAuthService implements OnApplicationBootstrap {
     const [admin] = await this.db.select().from(admins).where(eq(admins.id, adminId)).limit(1);
     if (!admin?.totpSecretEnc) throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '请先调用 setup 获取密钥');
     const secret = this.crypto.decrypt(admin.totpSecretEnc);
-    if (!verifyTotp(secret, code)) throw new AppError(ErrorCodes.TWO_FACTOR_INVALID, '动态码不正确，请确认手机时间准确', 400);
-    await this.db.update(admins).set({ totpEnabled: true, updatedAt: new Date() }).where(eq(admins.id, adminId));
+    const counter = matchTotp(secret, code);
+    if (counter === null) throw new AppError(ErrorCodes.TWO_FACTOR_INVALID, '动态码不正确，请确认手机时间准确', 400);
+    // 只校验通过即可启用；不写入 totpLastCounter，避免紧接着登录被当成重放
+    await this.db.update(admins)
+      .set({ totpEnabled: true, updatedAt: new Date() })
+      .where(eq(admins.id, adminId));
     await this.audit.record({
       actorType: 'admin', actorId: adminId, actorEmail: admin.email,
       action: 'admin.2fa_enabled', targetType: 'admin', targetId: adminId,
@@ -292,11 +306,11 @@ export class AdminAuthService implements OnApplicationBootstrap {
       throw AppError.unauthorized(ErrorCodes.INVALID_CREDENTIALS, '密码不正确');
     }
     const secret = admin.totpSecretEnc ? this.crypto.decrypt(admin.totpSecretEnc) : null;
-    if (!secret || !verifyTotp(secret, code)) {
+    if (!secret || matchTotp(secret, code) === null) {
       throw new AppError(ErrorCodes.TWO_FACTOR_INVALID, '动态码不正确', 400);
     }
     await this.db.update(admins)
-      .set({ totpEnabled: false, totpSecretEnc: null, updatedAt: new Date() })
+      .set({ totpEnabled: false, totpSecretEnc: null, totpLastCounter: null, updatedAt: new Date() })
       .where(eq(admins.id, adminId));
     await this.audit.record({
       actorType: 'admin', actorId: adminId, actorEmail: admin.email,

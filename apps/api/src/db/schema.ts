@@ -32,6 +32,8 @@ export const admins = pgTable('admins', {
   status: text('status').$type<'active' | 'disabled'>().notNull().default('active'),
   totpSecretEnc: text('totp_secret_enc'),
   totpEnabled: boolean('totp_enabled').notNull().default(false),
+  /** 已用过的 TOTP counter，防止同一动态码在窗口内重放（suggestion） */
+  totpLastCounter: integer('totp_last_counter'),
   failedAttempts: integer('failed_attempts').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),

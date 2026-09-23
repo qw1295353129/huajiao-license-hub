@@ -1,8 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { timingSafeEqual } from 'node:crypto';
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Entitlements, LicenseFile } from '@license-hub/shared';
-import { formatLicenseKey, normalizeLicenseKey } from '@license-hub/shared';
+import { extractLicenseKeyCandidate, formatLicenseKey, normalizeLicenseKey } from '@license-hub/shared';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { CryptoService } from '../../crypto/crypto.service';
 import { DB } from '../../db/db.module';
@@ -49,7 +50,9 @@ export class ActivationService {
   /* ------------------------------------------------ 查询与校验 */
 
   private async resolveByKey(rawKey: string): Promise<ResolvedLicense | null> {
-    const normalized = normalizeLicenseKey(rawKey);
+    // 容错：允许输入带前缀/多余字符，取末 16 位候选再归一化（suggestion）
+    const candidate = extractLicenseKeyCandidate(rawKey) ?? rawKey;
+    const normalized = normalizeLicenseKey(candidate);
     const lookup = this.crypto.blindIndex(normalized, 'license');
     const [row] = await this.db.select({
       license: licenses,
@@ -645,7 +648,10 @@ export class ActivationService {
   private parseRequestCode(code: string): Record<string, unknown> {
     const [body, mac] = code.trim().split('.');
     if (!body || !mac) throw new AppError(ErrorCodes.OFFLINE_CODE_INVALID, '请求码格式不正确', 400);
-    if (this.crypto.blindIndex(body, 'offline-request').slice(0, 32) !== mac) {
+    const expected = this.crypto.blindIndex(body, 'offline-request').slice(0, 32);
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const macBuf = Buffer.from(mac, 'utf8');
+    if (expectedBuf.length !== macBuf.length || !timingSafeEqual(expectedBuf, macBuf)) {
       throw new AppError(ErrorCodes.OFFLINE_CODE_INVALID, '请求码校验失败，请确认完整复制', 400);
     }
     try {

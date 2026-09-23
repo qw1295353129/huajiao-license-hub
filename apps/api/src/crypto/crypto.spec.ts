@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadConfig } from '../config/configuration';
 import { CryptoService, canonicalJson } from './crypto.service';
-import { generateTotpSecret, totpCode, verifyTotp } from './totp';
+import { generateTotpSecret, matchTotp, totpCode, verifyTotp } from './totp';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-jwt-secret-0123456789abcdefghijklmn';
 process.env.LICENSE_PEPPER = process.env.LICENSE_PEPPER ?? 'test-license-pepper-0123456789abcdef';
@@ -113,5 +113,15 @@ describe('CryptoService', () => {
     assert.equal(verifyTotp(secret, code, 1, now), true);
     assert.equal(verifyTotp(secret, code, 0, now + 120_000), false);
     assert.equal(verifyTotp(secret, 'abcdef', 1, now), false);
+    // matchTotp 返回 counter，供防重放
+    assert.equal(typeof matchTotp(secret, code, 1, now), 'number');
+    assert.equal(matchTotp(secret, 'abcdef', 1, now), null);
+  });
+
+  it('恶意 scrypt 参数哈希直接拒绝（不抛异常）', () => {
+    assert.equal(crypto.verifyPassword('x', 'scrypt$NaN$8$1$YWJj$YWJj'), false);
+    assert.equal(crypto.verifyPassword('x', 'scrypt$99999999$8$1$YWJj$YWJj'), false);
+    assert.equal(crypto.verifyPassword('x', 'scrypt$16384$999$1$YWJj$YWJj'), false);
+    assert.equal(crypto.verifyPassword('x', 'not-a-hash'), false);
   });
 });

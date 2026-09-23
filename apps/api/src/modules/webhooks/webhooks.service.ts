@@ -77,7 +77,7 @@ export class WebhooksService {
       url: dto.url,
       description: dto.description ?? '',
       secretEnc: this.crypto.encrypt(secret),
-      secretMasked: secret.slice(0, 8) + '****' + secret.slice(-4),
+      secretMasked: secret.slice(0, 6) + '****' + secret.slice(-2),
       events: dto.events,
     }).returning();
     void actor;
@@ -100,7 +100,7 @@ export class WebhooksService {
     if (dto.rotateSecret) {
       secret = 'whsec_' + this.crypto.randomToken(24);
       patch.secretEnc = this.crypto.encrypt(secret);
-      patch.secretMasked = secret.slice(0, 8) + '****' + secret.slice(-4);
+      patch.secretMasked = secret.slice(0, 6) + '****' + secret.slice(-2);
     }
     const [row] = await this.db.update(webhookEndpoints).set(patch).where(eq(webhookEndpoints.id, id)).returning();
     return { endpoint: this.toPublic(row), ...(secret ? { secret } : {}) };

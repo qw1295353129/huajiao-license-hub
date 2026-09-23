@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNotNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import {
-  formatLicenseKey, isValidLicenseKeyShape, maskLicenseKey, normalizeLicenseKey,
+  extractLicenseKeyCandidate, formatLicenseKey, isValidLicenseKeyShape, maskLicenseKey, normalizeLicenseKey,
   type LicenseSource, type LicenseStatus,
 } from '@license-hub/shared';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
@@ -291,7 +291,8 @@ export class LicensesService {
   }
 
   async findByRawKey(rawKey: string) {
-    const lookup = this.crypto.blindIndex(normalizeLicenseKey(rawKey), 'license');
+    const candidate = extractLicenseKeyCandidate(rawKey) ?? rawKey;
+    const lookup = this.crypto.blindIndex(normalizeLicenseKey(candidate), 'license');
     const [row] = await this.db.select().from(licenses).where(eq(licenses.keyLookup, lookup)).limit(1);
     return row ?? null;
   }

@@ -22,8 +22,15 @@ const { chromium } = loadPlaywright();
   await page.goto((process.env.WEB_URL || 'http://localhost:5273') + '/login', { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
   await page.screenshot({ path: '/tmp/lh-login.png' });
-  await page.fill('input[type=email]', 'admin@licensehub.local');
-  await page.fill('input[type=password]', 'Admin@12345');
+  const base = process.env.WEB_URL || 'http://localhost:5273';
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(base);
+  const email = process.env.ADMIN_EMAIL || (isLocal ? 'admin@licensehub.local' : null);
+  const password = process.env.ADMIN_PASSWORD || (isLocal ? 'Admin@12345' : null);
+  if (!email || !password) {
+    throw new Error('非本机目标必须设置 ADMIN_EMAIL 与 ADMIN_PASSWORD');
+  }
+  await page.fill('input[type=email]', email);
+  await page.fill('input[type=password]', password);
   await page.click('button[type=submit]');
   await page.waitForTimeout(3000);
   await page.screenshot({ path: '/tmp/lh-dashboard.png' });

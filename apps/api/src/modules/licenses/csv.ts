@@ -3,7 +3,9 @@
 export function toCsv(rows: Record<string, unknown>[], columns: string[]): string {
   const escape = (value: unknown): string => {
     if (value === null || value === undefined) return '';
-    const text = value instanceof Date ? value.toISOString() : String(value);
+    let text = value instanceof Date ? value.toISOString() : String(value);
+    // Excel 公式注入：以 = + - @ 或制表/回车开头时加前导单引号（suggestion）
+    if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
     // 含逗号、引号、换行时用双引号包裹，内部引号翻倍
     return /[",\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
   };
