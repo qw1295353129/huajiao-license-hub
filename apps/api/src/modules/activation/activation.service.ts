@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { and, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Entitlements, LicenseFile } from '@license-hub/shared';
 import { formatLicenseKey, normalizeLicenseKey } from '@license-hub/shared';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
@@ -193,6 +193,7 @@ export class ActivationService {
   private async buildLicenseFile(
     resolved: ResolvedLicense,
     binding: { deviceFingerprint?: string | null; domain?: string | null } | null,
+    offlineGraceDays?: number,
   ): Promise<LicenseFile> {
     const { license, plan, product } = resolved;
     return this.signer.sign({
@@ -206,7 +207,8 @@ export class ActivationService {
       features: license.featureKeys,
       maxDevices: license.maxDevices,
       deviceFingerprint: binding?.deviceFingerprint ?? null,
-      offlineGraceDays: plan.offlineGraceDays,
+      // 覆盖必须在签名前写入载荷，禁止签名后再改（C7）
+      offlineGraceDays: offlineGraceDays ?? plan.offlineGraceDays,
       remainingUsages: license.remainingUsages,
     });
   }
@@ -293,32 +295,64 @@ export class ActivationService {
       }
 
       if (plan.requireDeviceApproval) {
-        await this.db.insert(licenseActivations).values({
-          licenseId: license.id,
-          deviceId: device.id,
-          status: 'pending',
-          ip: ctx.ip ?? null,
-          appVersion: dto.device.appVersion ?? null,
-          os: dto.device.os ?? null,
-        });
-        await this.recordEvent({
-          licenseId: license.id,
-          type: 'activation_pending',
-          message: '新设备待人工审批',
-          payload: { deviceId: device.id },
-          ip: ctx.ip ?? null,
-        });
+        // 同一 (license, device) 至多一条 pending：先查再插，并发撞唯一索引时吞掉冲突（N18）
+        const [existingPending] = await this.db.select().from(licenseActivations)
+          .where(and(
+            eq(licenseActivations.licenseId, license.id),
+            eq(licenseActivations.deviceId, device.id),
+            eq(licenseActivations.status, 'pending'),
+          )).limit(1);
+        if (!existingPending) {
+          try {
+            await this.db.insert(licenseActivations).values({
+              licenseId: license.id,
+              deviceId: device.id,
+              status: 'pending',
+              ip: ctx.ip ?? null,
+              appVersion: dto.device.appVersion ?? null,
+              os: dto.device.os ?? null,
+            });
+            await this.recordEvent({
+              licenseId: license.id,
+              type: 'activation_pending',
+              message: '新设备待人工审批',
+              payload: { deviceId: device.id },
+              ip: ctx.ip ?? null,
+            });
+          } catch (error) {
+            // 唯一索引冲突：另一并发请求已插入 pending，按已存在处理
+            const message = error instanceof Error ? error.message : String(error);
+            if (!/unique|duplicate/i.test(message)) throw error;
+          }
+        }
         throw new AppError(ErrorCodes.DEVICE_APPROVAL_REQUIRED, '该授权开启人工审批，新设备需管理员确认后可用', 409);
       }
 
-      await this.db.insert(licenseActivations).values({
+      const [inserted] = await this.db.insert(licenseActivations).values({
         licenseId: license.id,
         deviceId: device.id,
         status: 'active',
         ip: ctx.ip ?? null,
         appVersion: dto.device.appVersion ?? null,
         os: dto.device.os ?? null,
-      });
+      }).returning({ id: licenseActivations.id });
+
+      // 插入后复核，防止并发绕过上限（N9 TOCTOU 补偿）
+      if (license.maxDevices > 0 && plan.overLimitPolicy !== 'kick_oldest') {
+        const recounted = await this.countActiveDevices(license.id);
+        if (recounted > license.maxDevices) {
+          await this.db.update(licenseActivations)
+            .set({ status: 'deactivated', deactivatedAt: new Date(), unbindReason: 'over_limit_compensate' })
+            .where(eq(licenseActivations.id, inserted.id));
+          await this.logVerification({ licenseId: license.id, deviceId: device.id, result: 'over_limit', ip: ctx.ip });
+          throw new AppError(
+            ErrorCodes.DEVICE_LIMIT_REACHED,
+            '设备数已达上限（' + license.maxDevices + ' 台），请先在客户端解绑或联系客服',
+            409,
+            { maxDevices: license.maxDevices, activeDevices: recounted - 1 },
+          );
+        }
+      }
     } else {
       await this.db.update(licenseActivations).set({
         lastSeenAt: new Date(),
@@ -663,13 +697,19 @@ export class ActivationService {
       throw new AppError(ErrorCodes.OFFLINE_CODE_EXPIRED, '请求码已过期（有效期 7 天）', 410);
     }
 
-    const fingerprint = typeof payload.fingerprint === 'string' ? payload.fingerprint : null;
-    const file = await this.buildLicenseFile(resolved, { deviceFingerprint: fingerprint });
-    if (offlineGraceDays !== undefined) file.offlineGraceDays = offlineGraceDays;
-
-    await this.db.update(offlineRequests)
+    // 条件更新抢占：并发下只有一方能把 fulfilledAt 从 null 置上（N12）
+    const claimed = await this.db.update(offlineRequests)
       .set({ fulfilledAt: new Date(), licenseId })
-      .where(eq(offlineRequests.id, record.id));
+      .where(and(eq(offlineRequests.id, record.id), isNull(offlineRequests.fulfilledAt)))
+      .returning({ id: offlineRequests.id });
+    if (claimed.length === 0) {
+      throw new AppError(ErrorCodes.OFFLINE_CODE_INVALID, '该请求码已使用过', 400);
+    }
+
+    const fingerprint = typeof payload.fingerprint === 'string' ? payload.fingerprint : null;
+    // offlineGraceDays 覆盖在签名前写入载荷（C7）
+    const file = await this.buildLicenseFile(resolved, { deviceFingerprint: fingerprint }, offlineGraceDays);
+
     await this.recordEvent({
       licenseId,
       type: 'offline_issued',
@@ -743,6 +783,43 @@ export class ActivationService {
     const [row] = await this.db.select().from(licenseActivations).where(eq(licenseActivations.id, id)).limit(1);
     if (!row) throw AppError.notFound('设备绑定记录不存在');
     if (row.status !== 'pending') throw AppError.conflict('该记录不是待审批状态');
+
+    // 批准前复核设备上限（N18）
+    const [resolved] = await this.db.select({ license: licenses, plan: plans })
+      .from(licenses)
+      .innerJoin(plans, eq(plans.id, licenses.planId))
+      .where(eq(licenses.id, row.licenseId))
+      .limit(1);
+    if (!resolved) throw AppError.notFound('授权不存在');
+    const { license, plan } = resolved;
+    const activeBefore = await this.countActiveDevices(row.licenseId);
+    if (license.maxDevices > 0 && activeBefore >= license.maxDevices) {
+      if (plan.overLimitPolicy === 'kick_oldest') {
+        const [oldest] = await this.db.select().from(licenseActivations)
+          .where(and(eq(licenseActivations.licenseId, row.licenseId), eq(licenseActivations.status, 'active')))
+          .orderBy(licenseActivations.lastSeenAt)
+          .limit(1);
+        if (oldest) {
+          await this.db.update(licenseActivations)
+            .set({ status: 'deactivated', deactivatedAt: new Date(), unbindReason: 'kicked_by_new_device' })
+            .where(eq(licenseActivations.id, oldest.id));
+          await this.recordEvent({
+            licenseId: row.licenseId,
+            type: 'deactivated',
+            message: '设备数超限，自动踢出最久未使用的设备',
+            payload: { kickedActivationId: oldest.id },
+          });
+        }
+      } else {
+        throw new AppError(
+          ErrorCodes.DEVICE_LIMIT_REACHED,
+          '设备数已达上限（' + license.maxDevices + ' 台），请先解绑再批准新设备',
+          409,
+          { maxDevices: license.maxDevices, activeDevices: activeBefore },
+        );
+      }
+    }
+
     await this.db.update(licenseActivations).set({ status: 'active' }).where(eq(licenseActivations.id, id));
     const activeDevices = await this.countActiveDevices(row.licenseId);
     await this.db.update(licenses)

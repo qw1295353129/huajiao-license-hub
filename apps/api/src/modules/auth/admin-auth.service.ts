@@ -116,8 +116,8 @@ export class AdminAuthService implements OnApplicationBootstrap {
       updatedAt: new Date(),
     }).where(eq(admins.id, id)).returning();
 
-    // 停用账号时立即吊销其全部会话
-    if (patch.status === 'disabled') {
+    // 停用账号或角色变更时立即吊销其全部会话（降权/升权后旧令牌不得继续生效）
+    if (patch.status === 'disabled' || (patch.role !== undefined && patch.role !== target.role)) {
       await this.tokens.revokeAll('admin', id);
     }
     await this.audit.record({
@@ -157,6 +157,13 @@ export class AdminAuthService implements OnApplicationBootstrap {
       // 统一提示，避免账号枚举
       throw AppError.unauthorized(ErrorCodes.INVALID_CREDENTIALS, '邮箱或密码不正确');
     }
+
+    // 先验密码，再暴露锁定/禁用状态：错误密码不得泄露账号是否被锁或停用（N5）
+    if (!this.crypto.verifyPassword(input.password, admin.passwordHash)) {
+      await this.registerFailure(admin);
+      throw AppError.unauthorized(ErrorCodes.INVALID_CREDENTIALS, '邮箱或密码不正确');
+    }
+
     if (admin.status !== 'active') {
       throw AppError.forbidden('账号已被禁用，请联系站点所有者');
     }
@@ -168,11 +175,6 @@ export class AdminAuthService implements OnApplicationBootstrap {
         423,
         { lockedUntil: admin.lockedUntil.toISOString() },
       );
-    }
-
-    if (!this.crypto.verifyPassword(input.password, admin.passwordHash)) {
-      await this.registerFailure(admin);
-      throw AppError.unauthorized(ErrorCodes.INVALID_CREDENTIALS, '邮箱或密码不正确');
     }
 
     if (admin.totpEnabled) {
@@ -214,7 +216,8 @@ export class AdminAuthService implements OnApplicationBootstrap {
     const shouldLock = attempts >= MAX_FAILED_ATTEMPTS;
     await this.db.update(admins)
       .set({
-        failedAttempts: shouldLock ? 0 : attempts,
+        // 锁定后不清零：保留计数使退避持续生效（N5）
+        failedAttempts: attempts,
         lockedUntil: shouldLock ? new Date(Date.now() + LOCK_MINUTES * 60_000) : admin.lockedUntil,
       })
       .where(eq(admins.id, admin.id));
@@ -225,15 +228,13 @@ export class AdminAuthService implements OnApplicationBootstrap {
       action: shouldLock ? 'admin.lock' : 'admin.login_failed',
       targetType: 'admin',
       targetId: admin.id,
-      diff: { after: { attempts: shouldLock ? 0 : attempts, locked: shouldLock } },
+      diff: { after: { attempts, locked: shouldLock } },
     });
   }
 
   async refresh(refreshToken: string, meta: { ip?: string; userAgent?: string }): Promise<LoginResult> {
-    const { session, tokens } = await this.tokens.rotate(refreshToken, meta);
-    if (session.subjectType !== 'admin') {
-      throw AppError.forbidden('该刷新令牌不属于管理端');
-    }
+    // 轮换前校验 subjectType，避免门户 refresh token 被拿到管理端消费（N3）
+    const { session, tokens } = await this.tokens.rotate(refreshToken, meta, 'admin');
     const [admin] = await this.db.select().from(admins).where(eq(admins.id, session.subjectId)).limit(1);
     if (!admin || admin.status !== 'active') {
       throw AppError.unauthorized(ErrorCodes.ACCOUNT_DISABLED, '账号不存在或已被禁用');
@@ -304,7 +305,11 @@ export class AdminAuthService implements OnApplicationBootstrap {
     return { ok: true };
   }
 
-  async changePassword(adminId: string, dto: ChangePasswordDto): Promise<{ ok: true; revokedSessions: number }> {
+  async changePassword(
+    adminId: string,
+    dto: ChangePasswordDto,
+    keepSessionId?: string,
+  ): Promise<{ ok: true; revokedSessions: number }> {
     const [admin] = await this.db.select().from(admins).where(eq(admins.id, adminId)).limit(1);
     if (!admin) throw AppError.notFound('管理员不存在');
     if (!this.crypto.verifyPassword(dto.currentPassword, admin.passwordHash)) {
@@ -316,8 +321,8 @@ export class AdminAuthService implements OnApplicationBootstrap {
     await this.db.update(admins)
       .set({ passwordHash: this.crypto.hashPassword(dto.newPassword), updatedAt: new Date() })
       .where(eq(admins.id, adminId));
-    // 改密后强制其它设备重新登录，但保留当前会话可用
-    const revoked = await this.tokens.revokeAll('admin', adminId);
+    // 改密后强制其它设备重新登录，但保留当前会话可用（N1）
+    const revoked = await this.tokens.revokeAll('admin', adminId, keepSessionId);
     await this.audit.record({
       actorType: 'admin', actorId: adminId, actorEmail: admin.email,
       action: 'admin.password_changed', targetType: 'admin', targetId: adminId,

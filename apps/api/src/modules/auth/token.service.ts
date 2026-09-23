@@ -78,14 +78,21 @@ export class TokenService {
     return { id: row.id, refreshToken };
   }
 
-  /** 刷新即轮换：旧会话立即失效，并保留轮换链以便溯源。 */
+  /**
+   * 刷新即轮换：旧会话立即失效，并保留轮换链以便溯源。
+   * expectedSubject：在任何写操作前校验会话归属，防止跨端消费刷新令牌（N3）。
+   */
   async rotate(
     refreshToken: string,
     meta: { ip?: string; userAgent?: string },
+    expectedSubject?: 'admin' | 'customer',
   ): Promise<{ session: { subjectType: 'admin' | 'customer'; subjectId: string }; tokens: IssuedTokens }> {
     const hash = this.crypto.sha256(refreshToken);
     const [session] = await this.db.select().from(sessions).where(eq(sessions.refreshTokenHash, hash)).limit(1);
     if (!session) throw AppError.unauthorized(ErrorCodes.UNAUTHENTICATED, '刷新令牌无效');
+    if (expectedSubject && session.subjectType !== expectedSubject) {
+      throw AppError.forbidden('该刷新令牌不属于当前端');
+    }
     if (session.revokedAt) throw AppError.unauthorized(ErrorCodes.UNAUTHENTICATED, '会话已被撤销，请重新登录');
     if (session.expiresAt.getTime() < Date.now()) {
       throw AppError.unauthorized(ErrorCodes.UNAUTHENTICATED, '会话已过期，请重新登录');

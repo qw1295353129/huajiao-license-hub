@@ -23,7 +23,8 @@ export class PaymentController {
     @Headers('x-lh-signature') signature: string | undefined,
     @Req() request: FastifyRequest & { rawBody?: string },
   ) {
-    const rawBody = request.rawBody ?? JSON.stringify(dto);
+    // 不回退为 JSON.stringify(dto)：验签必须基于收到的原始字节，缺失即拒绝
+    const rawBody = request.rawBody ?? '';
     return this.orders.handleCallback(provider, dto, rawBody, signature);
   }
 }

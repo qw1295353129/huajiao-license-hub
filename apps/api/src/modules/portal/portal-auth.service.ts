@@ -20,6 +20,9 @@ interface PortalSession {
   tokens: { accessToken: string; refreshToken: string; expiresIn: number };
 }
 
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCK_MINUTES = 15;
+
 @Injectable()
 export class PortalAuthService {
   private readonly logger = new Logger('PortalAuth');
@@ -50,7 +53,10 @@ export class PortalAuthService {
     };
   }
 
-  async register(dto: PortalRegisterDto, meta: { ip?: string; userAgent?: string }): Promise<PortalSession> {
+  async register(
+    dto: PortalRegisterDto,
+    meta: { ip?: string; userAgent?: string },
+  ): Promise<PortalSession & { devToken?: string }> {
     const settings = await this.settings.get();
     if (!settings.allowRegistration) {
       throw AppError.forbidden('本站已关闭自助注册，请联系管理员开通账号');
@@ -65,13 +71,31 @@ export class PortalAuthService {
       passwordHash: this.crypto.hashPassword(dto.password),
     }).returning();
 
-    // 把历史订单/授权按邮箱认领到新账号
-    const claimed = await this.customers.claimLicenses(row.id, email);
+    // 邮箱验证前不认领历史订单/授权：否则任意人可用受害者邮箱注册后抢占归属（C2）
+    const claimed = 0;
 
     await this.mail.send({
       to: email,
       template: 'welcome',
       vars: { name: row.name || email, email },
+      relatedType: 'customer',
+      relatedId: row.id,
+    }).catch(() => undefined);
+
+    // 发送邮箱验证链接（验证成功后才会 claimLicenses）
+    const rawVerifyToken = this.crypto.randomToken(32);
+    await this.db.insert(authTokens).values({
+      subjectType: 'customer',
+      subjectId: row.id,
+      purpose: 'email_verify',
+      tokenHash: this.crypto.blindIndex(rawVerifyToken, 'auth-token'),
+      expiresAt: new Date(Date.now() + 24 * 3_600_000),
+    });
+    const verifyUrl = this.config.appOrigin.replace(/\/$/, '') + '/portal/verify-email?token=' + rawVerifyToken;
+    await this.mail.send({
+      to: email,
+      template: 'email_verify',
+      vars: { name: row.name || email, verifyUrl, expiresIn: '24 小时' },
       relatedType: 'customer',
       relatedId: row.id,
     }).catch(() => undefined);
@@ -98,23 +122,40 @@ export class PortalAuthService {
       { id: row.id, email: row.email, name: row.name, audience: 'customer' },
       meta,
     );
-    return { user: this.toSessionUser(row), tokens };
+    // 本地开发且未配置 SMTP 时回显验证令牌，便于自测（与 forgot-password 一致）
+    const devToken = !this.config.isProd && !this.mail.enabled ? rawVerifyToken : undefined;
+    return { user: this.toSessionUser(row), tokens, ...(devToken ? { devToken } : {}) };
   }
 
   async login(dto: PortalLoginDto, meta: { ip?: string; userAgent?: string }): Promise<PortalSession> {
     const email = dto.email.trim().toLowerCase();
     const [row] = await this.db.select().from(customers).where(eq(customers.email, email)).limit(1);
-    if (!row || !row.passwordHash || !this.crypto.verifyPassword(dto.password, row.passwordHash)) {
-      // 统一提示，避免账号枚举
+    if (!row) {
+      throw AppError.unauthorized(ErrorCodes.INVALID_CREDENTIALS, '邮箱或密码不正确');
+    }
+    if (row.lockedUntil && row.lockedUntil.getTime() > Date.now()) {
+      const minutes = Math.ceil((row.lockedUntil.getTime() - Date.now()) / 60000);
+      throw new AppError(
+        ErrorCodes.ACCOUNT_LOCKED,
+        '尝试次数过多，请 ' + minutes + ' 分钟后再试',
+        423,
+        { lockedUntil: row.lockedUntil.toISOString() },
+      );
+    }
+    if (!row.passwordHash || !this.crypto.verifyPassword(dto.password, row.passwordHash)) {
+      await this.registerFailure(row);
       throw AppError.unauthorized(ErrorCodes.INVALID_CREDENTIALS, '邮箱或密码不正确');
     }
     if (row.status !== 'active') {
       throw AppError.forbidden('账号已被封禁，请联系客服');
     }
     await this.db.update(customers)
-      .set({ lastLoginAt: new Date() })
+      .set({ lastLoginAt: new Date(), failedAttempts: 0, lockedUntil: null })
       .where(eq(customers.id, row.id));
-    await this.customers.claimLicenses(row.id, email);
+    // 仅已验证邮箱才认领：未验证时邮箱本身不可信（C2）
+    if (row.emailVerifiedAt) {
+      await this.customers.claimLicenses(row.id, email);
+    }
 
     const tokens = await this.tokens.issueForUser(
       { id: row.id, email: row.email, name: row.name, audience: 'customer' },
@@ -123,11 +164,58 @@ export class PortalAuthService {
     return { user: this.toSessionUser(row), tokens };
   }
 
+  /** 门户登录失败锁定（N4）：连续失败 5 次锁 15 分钟，与管理端策略一致。 */
+  private async registerFailure(row: typeof customers.$inferSelect): Promise<void> {
+    const attempts = row.failedAttempts + 1;
+    const shouldLock = attempts >= MAX_FAILED_ATTEMPTS;
+    await this.db.update(customers)
+      .set({
+        failedAttempts: attempts,
+        lockedUntil: shouldLock ? new Date(Date.now() + LOCK_MINUTES * 60_000) : row.lockedUntil,
+        updatedAt: new Date(),
+      })
+      .where(eq(customers.id, row.id));
+  }
+
+  /** 重发验证邮件：已验证则幂等成功；未验证则作废旧令牌并重发（C2 恢复路径）。 */
+  async resendVerify(email: string): Promise<{ ok: true; devToken?: string }> {
+    const normalized = email.trim().toLowerCase();
+    const [row] = await this.db.select().from(customers).where(eq(customers.email, normalized)).limit(1);
+    if (!row || row.emailVerifiedAt) return { ok: true };
+
+    await this.db.update(authTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(authTokens.subjectType, 'customer'),
+        eq(authTokens.subjectId, row.id),
+        eq(authTokens.purpose, 'email_verify'),
+        isNull(authTokens.usedAt),
+      ));
+
+    const rawVerifyToken = this.crypto.randomToken(32);
+    await this.db.insert(authTokens).values({
+      subjectType: 'customer',
+      subjectId: row.id,
+      purpose: 'email_verify',
+      tokenHash: this.crypto.blindIndex(rawVerifyToken, 'auth-token'),
+      expiresAt: new Date(Date.now() + 24 * 3_600_000),
+    });
+    const verifyUrl = this.config.appOrigin.replace(/\/$/, '') + '/portal/verify-email?token=' + rawVerifyToken;
+    await this.mail.send({
+      to: normalized,
+      template: 'email_verify',
+      vars: { name: row.name || normalized, verifyUrl, expiresIn: '24 小时' },
+      relatedType: 'customer',
+      relatedId: row.id,
+    }).catch(() => undefined);
+
+    const devToken = !this.config.isProd && !this.mail.enabled ? rawVerifyToken : undefined;
+    return devToken ? { ok: true, devToken } : { ok: true };
+  }
+
   async refresh(refreshToken: string, meta: { ip?: string; userAgent?: string }): Promise<PortalSession> {
-    const { session, tokens } = await this.tokens.rotate(refreshToken, meta);
-    if (session.subjectType !== 'customer') {
-      throw AppError.forbidden('该刷新令牌不属于用户门户');
-    }
+    // 轮换前校验 subjectType，避免管理端 refresh token 被拿到门户消费（N3）
+    const { session, tokens } = await this.tokens.rotate(refreshToken, meta, 'customer');
     const [row] = await this.db.select().from(customers).where(eq(customers.id, session.subjectId)).limit(1);
     if (!row || row.status !== 'active') {
       throw AppError.unauthorized(ErrorCodes.ACCOUNT_DISABLED, '账号不存在或已被封禁');
@@ -175,12 +263,58 @@ export class PortalAuthService {
     return { ok: true, revoked };
   }
 
+  /** 邮箱验证：标记 emailVerifiedAt 后认领历史授权（C2）。 */
+  async verifyEmail(token: string): Promise<{ ok: true; claimedLicenses: number }> {
+    const hash = this.crypto.blindIndex(token, 'auth-token');
+    const [record] = await this.db.select().from(authTokens)
+      .where(and(
+        eq(authTokens.tokenHash, hash),
+        eq(authTokens.purpose, 'email_verify'),
+        isNull(authTokens.usedAt),
+        gt(authTokens.expiresAt, new Date()),
+      ))
+      .limit(1);
+    if (!record) throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '验证链接无效或已过期，请重新发起');
+
+    const [customer] = await this.db.select().from(customers).where(eq(customers.id, record.subjectId)).limit(1);
+    if (!customer) throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '验证链接无效或已过期，请重新发起');
+
+    await this.db.update(authTokens).set({ usedAt: new Date() }).where(eq(authTokens.id, record.id));
+    if (!customer.emailVerifiedAt) {
+      await this.db.update(customers)
+        .set({ emailVerifiedAt: new Date(), updatedAt: new Date() })
+        .where(eq(customers.id, customer.id));
+    }
+    const claimed = await this.customers.claimLicenses(customer.id, customer.email);
+
+    await this.audit.record({
+      actorType: 'customer',
+      actorId: customer.id,
+      actorEmail: customer.email,
+      action: 'customer.email_verified',
+      targetType: 'customer',
+      targetId: customer.id,
+      diff: { after: { claimedLicenses: claimed } },
+    });
+    return { ok: true, claimedLicenses: claimed };
+  }
+
   /** 发起找回密码：生成一次性令牌并邮件发送。 */
   async forgotPassword(email: string): Promise<{ ok: true; devToken?: string }> {
     const normalized = email.trim().toLowerCase();
     const [row] = await this.db.select().from(customers).where(eq(customers.email, normalized)).limit(1);
     // 无论账号是否存在都返回成功，避免账号枚举
     if (!row) return { ok: true };
+
+    // 作废该账号此前未使用的重置令牌，保证「以最新一次为准」（N7）
+    await this.db.update(authTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(authTokens.subjectType, 'customer'),
+        eq(authTokens.subjectId, row.id),
+        eq(authTokens.purpose, 'password_reset'),
+        isNull(authTokens.usedAt),
+      ));
 
     const rawToken = this.crypto.randomToken(32);
     const expiresAt = new Date(Date.now() + 30 * 60_000);
@@ -222,7 +356,14 @@ export class PortalAuthService {
     await this.db.update(customers)
       .set({ passwordHash: this.crypto.hashPassword(newPassword), updatedAt: new Date() })
       .where(eq(customers.id, record.subjectId));
-    await this.db.update(authTokens).set({ usedAt: new Date() }).where(eq(authTokens.id, record.id));
+    await this.db.update(authTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(authTokens.subjectType, 'customer'),
+        eq(authTokens.subjectId, record.subjectId),
+        eq(authTokens.purpose, 'password_reset'),
+        isNull(authTokens.usedAt),
+      ));
     const revoked = await this.tokens.revokeAll('customer', record.subjectId);
 
     await this.audit.record({

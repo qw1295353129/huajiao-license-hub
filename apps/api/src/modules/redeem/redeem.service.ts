@@ -138,7 +138,7 @@ export class RedeemService {
     return { items, total: Number(totalRow?.value ?? 0), page, pageSize };
   }
 
-  /** 导出卡密：默认含明文（运营要拿去买），写审计。 */
+  /** 导出卡密：默认掩码（reveal=true 才含明文），写审计。 */
   async exportCodes(batchId: string, reveal: boolean) {
     const rows = await this.db.select().from(redeemCodes)
       .where(eq(redeemCodes.batchId, batchId))
@@ -206,6 +206,7 @@ export class RedeemService {
       throw new AppError(ErrorCodes.REDEEM_CODE_USED, '该卡密已被使用', 409);
     }
 
+    let createdLicenseId: string | null = null;
     try {
       const created = await this.licenses.create({
         productId: batch.productId,
@@ -214,6 +215,7 @@ export class RedeemService {
         source: 'redeem',
         notes: '卡密兑换 · 批次 ' + batch.name,
       }, { email: customer?.email ?? 'system' });
+      createdLicenseId = created.license.id;
 
       await this.db.update(redeemCodes)
         .set({ licenseId: created.license.id })
@@ -242,10 +244,20 @@ export class RedeemService {
 
       return { license: created.license, licenseKey: created.keyFormatted, batchName: batch.name };
     } catch (error) {
-      // 发码失败必须把卡密退回可用，避免用户钱货两空
-      await this.db.update(redeemCodes)
-        .set({ status: 'unused', usedAt: null, usedByCustomerId: null })
-        .where(eq(redeemCodes.id, code.id));
+      if (createdLicenseId === null) {
+        // 授权尚未创建：把卡密退回可用，避免用户钱货两空
+        await this.db.update(redeemCodes)
+          .set({ status: 'unused', usedAt: null, usedByCustomerId: null })
+          .where(eq(redeemCodes.id, code.id))
+          .catch(() => undefined);
+      } else {
+        // 授权已创建成功：不得退回 unused（否则同一卡密可再兑换出第二张授权）。
+        // 尽力补写 licenseId 关联，然后原样抛出错误。
+        await this.db.update(redeemCodes)
+          .set({ licenseId: createdLicenseId })
+          .where(eq(redeemCodes.id, code.id))
+          .catch(() => undefined);
+      }
       throw error;
     }
   }

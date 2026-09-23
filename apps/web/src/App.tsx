@@ -24,6 +24,7 @@ import { PortalOrdersPage } from '@/portal/PortalOrdersPage';
 import { PortalRedeemPage } from '@/portal/PortalRedeemPage';
 import { PortalAccountPage } from '@/portal/PortalAccountPage';
 import { PortalResetPasswordPage } from '@/portal/PortalResetPasswordPage';
+import { PortalVerifyEmailPage } from '@/portal/PortalVerifyEmailPage';
 import { PortalDomainsPage } from '@/portal/PortalDomainsPage';
 
 function Splash({ label }: { label: string }) {
@@ -82,6 +83,7 @@ export default function App() {
       </Route>
       <Route path="/portal/login" element={<PortalLoginPage />} />
       <Route path="/portal/reset-password" element={<PortalResetPasswordPage />} />
+      <Route path="/portal/verify-email" element={<PortalVerifyEmailPage />} />
 
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route path="*" element={<NotFoundPage />} />

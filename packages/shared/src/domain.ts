@@ -73,9 +73,10 @@ export function domainMatches(candidate: string, licensed: string, allowSubdomai
   return candidate.endsWith('.' + licensed);
 }
 
-/** 从请求头推断域名（Host / X-Forwarded-Host），供服务端集成参考实现使用 */
+/** 从请求头推断域名（Host 优先，仅缺失时回退 X-Forwarded-Host），供服务端集成参考实现使用 */
 export function domainFromHeaders(headers: Record<string, string | string[] | undefined>): NormalizedDomain {
-  const raw = headers['x-forwarded-host'] ?? headers.host ?? headers[':authority'];
+  // host 优先（直连更可信），仅在缺失时才回退到可伪造的 x-forwarded-host
+  const raw = headers.host ?? headers['x-forwarded-host'] ?? headers[':authority'];
   const value = Array.isArray(raw) ? raw[0] : raw;
   return normalizeDomain(value ?? '');
 }

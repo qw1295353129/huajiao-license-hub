@@ -171,7 +171,7 @@ export function TeamPage() {
       <PageHeader
         title="团队与角色"
         description="给协作者分配最小必要权限；客服只能查、不能改"
-        actions={<InviteMemberModal onDone={refresh} />}
+        actions={user?.role === 'owner' ? <InviteMemberModal onDone={refresh} /> : null}
       />
 
       <DataTable
@@ -199,12 +199,16 @@ export function TeamPage() {
 }
 
 function InviteMemberModal({ onDone }: { onDone: () => void }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Key | null>('admin');
   const [busy, setBusy] = useState(false);
+
+  // 邀请与角色分配仅限 owner（后端 @Roles('owner') 的前端对齐）
+  if (user?.role !== 'owner') return null;
 
   const submit = async () => {
     setBusy(true);

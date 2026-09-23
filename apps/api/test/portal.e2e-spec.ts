@@ -45,9 +45,31 @@ describe('客户门户 / 订单 / 卡密（e2e）', () => {
     assert.ok(res.body.tokens.accessToken);
     customerId = res.body.user.id;
     customerToken = res.body.tokens.accessToken;
+    // 未验证邮箱前不认领历史授权（C2）
+    assert.ok(res.body.devToken, '开发环境应回显邮箱验证令牌');
 
     const dup = await request(server).post('/api/portal/auth/register').send(CUSTOMER);
     assert.equal(dup.status, 409);
+  });
+
+  it('邮箱验证：POST verify-email 后标记已验证', async () => {
+    const register = await request(server).post('/api/portal/auth/register')
+      .send({ email: 'verify-me@example.com', password: 'Verify12345' });
+    assert.equal(register.status, 201);
+    assert.ok(register.body.devToken);
+
+    const bad = await request(server).post('/api/portal/auth/verify-email')
+      .send({ token: 'x'.repeat(40) });
+    assert.equal(bad.status, 400);
+
+    const ok = await request(server).post('/api/portal/auth/verify-email')
+      .send({ token: register.body.devToken });
+    assert.equal(ok.status, 201, JSON.stringify(ok.body));
+    assert.equal(ok.body.ok, true);
+
+    const reuse = await request(server).post('/api/portal/auth/verify-email')
+      .send({ token: register.body.devToken });
+    assert.equal(reuse.status, 400, '验证令牌必须一次性');
   });
 
   it('注册成功会写入邮件日志（未配置 SMTP 时只记录不发送）', async () => {
@@ -132,7 +154,25 @@ describe('客户门户 / 订单 / 卡密（e2e）', () => {
     assert.equal(order.body.provider, 'generic');
     const orderNo = order.body.orderNo as string;
 
-    const payload = { eventId: 'evt-001', orderNo, status: 'paid', providerRef: 'tx-001' };
+    const basePayload = { eventId: 'evt-001', orderNo, status: 'paid' as const, providerRef: 'tx-001' };
+
+    // 金额不匹配：拒绝（且不消耗 eventId）
+    const wrongAmountRaw = JSON.stringify({ ...basePayload, amountCents: 1 });
+    const wrongAmountSig = createHmac('sha256', secret).update(wrongAmountRaw).digest('hex');
+    const wrongAmount = await request(server).post('/api/payments/generic/callback')
+      .set({ 'X-LH-Signature': 'sha256=' + wrongAmountSig, 'Content-Type': 'application/json' })
+      .send(wrongAmountRaw);
+    assert.equal(wrongAmount.status, 400, '金额与订单不一致必须拒绝');
+
+    // 缺少 amountCents：拒绝（应付 > 0 时必须带金额）
+    const missingAmountRaw = JSON.stringify(basePayload);
+    const missingAmountSig = createHmac('sha256', secret).update(missingAmountRaw).digest('hex');
+    const missingAmount = await request(server).post('/api/payments/generic/callback')
+      .set({ 'X-LH-Signature': 'sha256=' + missingAmountSig, 'Content-Type': 'application/json' })
+      .send(missingAmountRaw);
+    assert.equal(missingAmount.status, 400, '缺少 amountCents 必须拒绝');
+
+    const payload = { ...basePayload, amountCents: order.body.totalCents as number };
     const raw = JSON.stringify(payload);
     const badSig = await request(server).post('/api/payments/generic/callback')
       .set({ 'X-LH-Signature': 'sha256=deadbeef', 'Content-Type': 'application/json' })

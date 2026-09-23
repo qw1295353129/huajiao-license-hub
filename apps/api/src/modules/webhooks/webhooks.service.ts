@@ -6,8 +6,9 @@ import { CryptoService } from '../../crypto/crypto.service';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 import { webhookDeliveries, webhookEndpoints } from '../../db/schema';
-import { AppError } from '../../common/errors';
+import { AppError, ErrorCodes } from '../../common/errors';
 import { normalizePaging } from '../../common/pagination';
+import { isSafeWebhookUrl } from './dto';
 import type { CreateWebhookDto, ListDeliveriesDto, UpdateWebhookDto } from './dto';
 
 /** 退避重试节奏（秒）：30s → 2m → 10m → 1h → 6h，共 6 次后置为 failed。 */
@@ -67,6 +68,10 @@ export class WebhooksService {
   }
 
   async create(dto: CreateWebhookDto, actor: { id?: string }) {
+    // N15（SSRF）：创建入口再拦一次（DTO 已校验，此处兜底直调 service 的路径）
+    if (!isSafeWebhookUrl(dto.url)) {
+      throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, 'Webhook 地址不能指向内网/元数据主机');
+    }
     const secret = dto.secret ?? 'whsec_' + this.crypto.randomToken(24);
     const [row] = await this.db.insert(webhookEndpoints).values({
       url: dto.url,
@@ -81,6 +86,9 @@ export class WebhooksService {
   }
 
   async update(id: string, dto: UpdateWebhookDto) {
+    if (dto.url !== undefined && !isSafeWebhookUrl(dto.url)) {
+      throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, 'Webhook 地址不能指向内网/元数据主机');
+    }
     const [existing] = await this.db.select().from(webhookEndpoints).where(eq(webhookEndpoints.id, id)).limit(1);
     if (!existing) throw AppError.notFound('Webhook 不存在');
     const patch: Record<string, unknown> = { updatedAt: new Date() };

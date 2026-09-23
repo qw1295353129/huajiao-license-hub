@@ -60,10 +60,18 @@ export class CryptoService {
 
   /* ---------------- 盲索引 ---------------- */
 
-  /** 授权码/卡密/API Key 的不可逆索引：库中无明文也能精确查询。 */
+  /**
+   * 授权码/卡密/API Key 的不可逆索引：库中无明文也能精确查询。
+   * - license/redeem/email/apikey：归一为大写（展示层本就大写，兼容历史行）。
+   * - auth-token / offline-code / offline-request：大小写敏感，禁止 toUpperCase，
+   *   否则 base64url 令牌的大小写变体可命中同一哈希（N6）。
+   */
   blindIndex(value: string, namespace = 'license'): string {
+    const raw = value.trim();
+    const caseSensitive = namespace === 'auth-token' || namespace === 'offline-code' || namespace === 'offline-request';
+    const normalized = caseSensitive ? raw : raw.toUpperCase();
     return createHmac('sha256', this.config.security.licensePepper)
-      .update(namespace + ':' + value.trim().toUpperCase())
+      .update(namespace + ':' + normalized)
       .digest('hex');
   }
 
@@ -76,6 +84,14 @@ export class CryptoService {
 
   sha256(value: string): string {
     return createHmac('sha256', this.config.security.jwtSecret).update(value).digest('hex');
+  }
+
+  /** 恒定时间比较两个字符串（先比长度；用于解密后的全量密钥比对）。 */
+  compareSecret(a: string, b: string): boolean {
+    const left = Buffer.from(a, 'utf8');
+    const right = Buffer.from(b, 'utf8');
+    if (left.length !== right.length) return false;
+    return timingSafeEqual(left, right);
   }
 
   /* ---------------- Ed25519 授权文件签名 ---------------- */

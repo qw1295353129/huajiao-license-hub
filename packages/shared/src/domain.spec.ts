@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { domainMatches, normalizeDomain } from './domain';
+import { domainFromHeaders, domainMatches, normalizeDomain } from './domain';
 
 describe('域名归一化', () => {
   it('去掉协议、端口、路径、www 与大小写差异', () => {
@@ -55,5 +55,17 @@ describe('域名匹配', () => {
   it('空值不匹配', () => {
     assert.equal(domainMatches('', 'example.com'), false);
     assert.equal(domainMatches('example.com', ''), false);
+  });
+});
+
+describe('domainFromHeaders', () => {
+  it('优先 headers.host，忽略可伪造的 x-forwarded-host', () => {
+    const result = domainFromHeaders({ host: 'app.example.com', 'x-forwarded-host': 'evil.example' });
+    assert.equal(result.domain, 'app.example.com');
+  });
+
+  it('host 缺失时才回退到 x-forwarded-host', () => {
+    const result = domainFromHeaders({ 'x-forwarded-host': 'cdn.example.com' });
+    assert.equal(result.domain, 'cdn.example.com');
   });
 });

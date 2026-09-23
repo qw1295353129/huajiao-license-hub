@@ -83,12 +83,12 @@ export class PortalService {
     }).from(licenses)
       .innerJoin(products, eq(products.id, licenses.productId))
       .innerJoin(plans, eq(plans.id, licenses.planId))
-      .where(ownershipCondition(customerId, customer.email))
+      .where(ownershipCondition(customerId, customer.email, Boolean(customer.emailVerifiedAt)))
       .orderBy(desc(licenses.createdAt))
       .limit(pageSize).offset(offset);
 
     const [totalRow] = await this.db.select({ value: count() }).from(licenses)
-      .where(ownershipCondition(customerId, customer.email));
+      .where(ownershipCondition(customerId, customer.email, Boolean(customer.emailVerifiedAt)));
     return { items, total: Number(totalRow?.value ?? 0), page, pageSize };
   }
 
@@ -96,7 +96,10 @@ export class PortalService {
   private async requireOwnLicense(customerId: string, licenseId: string) {
     const customer = await this.requireCustomer(customerId);
     const [row] = await this.db.select().from(licenses)
-      .where(and(eq(licenses.id, licenseId), ownershipCondition(customerId, customer.email)))
+      .where(and(
+        eq(licenses.id, licenseId),
+        ownershipCondition(customerId, customer.email, Boolean(customer.emailVerifiedAt)),
+      ))
       .limit(1);
     if (!row) throw AppError.notFound('授权不存在或不属于当前账号');
     return row;
@@ -213,8 +216,8 @@ export class PortalService {
   async orders(customerId: string, query: { page?: number; pageSize?: number }) {
     const customer = await this.requireCustomer(customerId);
     const { page, pageSize, offset } = normalizePaging(query.page, query.pageSize);
-    // 兼容历史数据：早期订单可能只记录了邮箱
-    const condition = customer.email
+    // 兼容历史数据：仅已验证邮箱才允许按邮箱兜底（未验证不得认领他人订单）
+    const condition = customer.email && customer.emailVerifiedAt
       ? sql`(${orders.customerId} = ${customerId} or lower(${orders.email}) = ${customer.email.toLowerCase()})`
       : eq(orders.customerId, customerId);
 
@@ -241,7 +244,7 @@ export class PortalService {
     const [order] = await this.db.select().from(orders)
       .where(and(
         eq(orders.id, orderId),
-        customer.email
+        customer.email && customer.emailVerifiedAt
           ? sql`(${orders.customerId} = ${customerId} or lower(${orders.email}) = ${customer.email.toLowerCase()})`
           : eq(orders.customerId, customerId),
       ))
@@ -295,9 +298,10 @@ export class PortalService {
 }
 
 /**
- * 授权归属判定：优先看 customer_id，同时兼容「只有邮箱」的历史/导入数据。
- * 邮箱比对统一小写，避免大小写差异导致用户看不到自己的授权。
+ * 授权归属判定：优先看 customer_id。
+ * 邮箱兜底仅对已验证邮箱开放——否则任意人可用受害者邮箱注册后读走授权（C2）。
  */
-function ownershipCondition(customerId: string, email: string) {
+function ownershipCondition(customerId: string, email: string, emailVerified: boolean) {
+  if (!emailVerified) return eq(licenses.customerId, customerId);
   return sql`(${licenses.customerId} = ${customerId} or lower(${licenses.customerEmail}) = ${email.toLowerCase()})`;
 }

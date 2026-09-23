@@ -250,7 +250,15 @@ describe('授权发放与激活全链路（e2e）', () => {
     assert.ok(audit.body.total >= 1);
   });
 
-  it('恢复后重新可用，延期会写入事件', async () => {
+  it('吊销后不可恢复；暂停→恢复可用，延期会写入事件', async () => {
+    const denied = await request(server).post('/api/admin/licenses/' + licenseId + '/resume').set(auth()).send({});
+    assert.equal(denied.status, 409, '已吊销授权不得 resume');
+
+    const suspended = await request(server).post('/api/admin/licenses/' + licenseId + '/suspend')
+      .set(auth()).send({ reason: '临时冻结以便测试恢复' });
+    assert.equal(suspended.status, 201);
+    assert.equal(suspended.body.status, 'suspended');
+
     const resume = await request(server).post('/api/admin/licenses/' + licenseId + '/resume').set(auth()).send({});
     assert.equal(resume.status, 201);
     assert.equal(resume.body.status, 'active');
@@ -300,6 +308,11 @@ describe('授权发放与激活全链路（e2e）', () => {
 
     const revealed = await request(server).get('/api/admin/licenses/export?productId=' + productId + '&reveal=true').set(auth());
     assert.ok((revealed.text as string).includes(licenseKey), 'reveal=true 时应包含明文');
+
+    // C6 回归：?reveal=false 不得被当成 true（查询串布尔必须显式解析）
+    const notRevealed = await request(server).get('/api/admin/licenses/export?productId=' + productId + '&reveal=false').set(auth());
+    assert.equal(notRevealed.status, 200);
+    assert.ok(!(notRevealed.text as string).includes(licenseKey), '?reveal=false 必须按掩码导出');
 
     const importCsv = [
       'product_slug,plan_code,customer_email,notes',
@@ -357,10 +370,12 @@ describe('授权发放与激活全链路（e2e）', () => {
     assert.equal(badResponse.body.code, 'OFFLINE_CODE_INVALID');
 
     const response = await request(server).post('/api/admin/licenses/' + offlineLicenseId + '/offline-response')
-      .set(auth()).send({ requestCode });
+      .set(auth()).send({ requestCode, offlineGraceDays: 14 });
     assert.equal(response.status, 201);
     assert.ok(response.body.responseCode);
     assert.equal(response.body.licenseFile.deviceFingerprint, 'air-gapped-machine-01');
+    // 覆盖必须在签名前写入：否则客户端验签会失败（C7）
+    assert.equal(response.body.licenseFile.offlineGraceDays, 14);
 
     const replay = await request(server).post('/api/admin/licenses/' + offlineLicenseId + '/offline-response')
       .set(auth()).send({ requestCode });

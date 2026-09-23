@@ -82,8 +82,10 @@ export interface DomainLicenseFile {
   sig: string;
 }
 
-/** 用公钥验证域名授权文件（与服务端同一套规范化规则） */
+/** 用公钥验证域名授权文件（与服务端同一套规范化规则）；必须是 type==='domain' 的文件 */
 export async function verifyDomainFile(file: DomainLicenseFile, publicKeyBase64Url: string): Promise<boolean> {
+  // 类型混淆防护：设备授权文件不能当域名文件验签
+  if (file.type !== 'domain') return false;
   const { sig, ...payload } = file;
   if (!sig) return false;
   try {
@@ -150,8 +152,10 @@ function base64UrlToBytes(input: string): Uint8Array {
   return new Uint8Array(Buffer.from(padded, 'base64'));
 }
 
-/** 离线验签：只用公开信息即可判断授权文件是否被篡改。 */
+/** 离线验签：只用公开信息即可判断授权文件是否被篡改；拒绝 type==='domain' 的域名文件。 */
 export async function verifyLicenseFile(file: RawLicenseFile, publicKeyBase64Url: string): Promise<boolean> {
+  // 类型混淆防护：域名授权文件（type==='domain'）不走设备授权验签路径
+  if ((file as { type?: string }).type === 'domain') return false;
   const { sig, ...payload } = file;
   if (!sig) return false;
   try {
@@ -175,6 +179,8 @@ export async function verifyLicenseFile(file: RawLicenseFile, publicKeyBase64Url
 
 export class LicenseClient {
   private cachedKey: string | null;
+  /** kid → publicKey 全量映射（含轮换前的历史公钥），来自 /public-key 的 keys[] */
+  private cachedKeys: Map<string, string> | null = null;
   private readonly doFetch: typeof fetch;
 
   constructor(private readonly options: LicenseClientOptions) {
@@ -218,12 +224,40 @@ export class LicenseClient {
     }
   }
 
-  /** 拉取并缓存验签公钥。 */
+  /** 拉取并缓存验签公钥（含 keys[] 全量 kid 映射）。 */
   async fetchPublicKey(): Promise<string | null> {
     if (this.cachedKey) return this.cachedKey;
-    const res = await this.request<{ current: { publicKey: string } | null }>('/api/v1/public-key', undefined, 'GET');
-    if (!res.ok || !res.current) return null;
-    this.cachedKey = res.current.publicKey;
+    await this.loadKeyMap();
+    return this.cachedKey;
+  }
+
+  /** 从 /public-key 响应缓存 current + keys[] 全量映射（失败时保留已有内置/缓存键）。 */
+  private async loadKeyMap(): Promise<void> {
+    if (this.cachedKeys) return;
+    const res = await this.request<{
+      current: { kid: string; publicKey: string } | null;
+      keys?: Array<{ kid: string; publicKey: string }>;
+    }>('/api/v1/public-key', undefined, 'GET');
+    if (!res.ok || !res.current) return;
+    const map = new Map<string, string>();
+    for (const entry of res.keys ?? []) {
+      if (entry && typeof entry.kid === 'string' && typeof entry.publicKey === 'string') {
+        map.set(entry.kid, entry.publicKey);
+      }
+    }
+    const current = res.current;
+    if (typeof current.kid === 'string' && typeof current.publicKey === 'string' && !map.has(current.kid)) {
+      map.set(current.kid, current.publicKey);
+    }
+    if (map.size > 0) this.cachedKeys = map;
+    if (!this.cachedKey && typeof current.publicKey === 'string') this.cachedKey = current.publicKey;
+  }
+
+  /** 按文件 kid 选验签公钥：优先 keys[kid]，回退 current/内置；拉不到且无内置键则返回 null。 */
+  private async resolveKeyForKid(kid?: string): Promise<string | null> {
+    if (kid && this.cachedKeys?.has(kid)) return this.cachedKeys.get(kid)!;
+    if (!this.cachedKeys) await this.loadKeyMap();
+    if (kid && this.cachedKeys?.has(kid)) return this.cachedKeys.get(kid)!;
     return this.cachedKey;
   }
 
@@ -238,8 +272,9 @@ export class LicenseClient {
       { licenseKey, product: this.options.product, device },
     );
     if (res.ok) {
-      const key = await this.fetchPublicKey();
-      if (key && !(await verifyLicenseFile(res.licenseFile, key))) {
+      const key = await this.resolveKeyForKid(res.licenseFile.kid);
+      if (!key) return { ok: false, reason: 'NO_PUBLIC_KEY', message: '无法获取验签公钥，拒绝接受授权文件' };
+      if (!(await verifyLicenseFile(res.licenseFile, key))) {
         return { ok: false, reason: 'SIGNATURE_INVALID', message: '授权文件验签失败，请勿使用被篡改的文件' };
       }
     }
@@ -285,8 +320,9 @@ export class LicenseClient {
       ...(options?.userAgent ? { userAgent: options.userAgent } : {}),
     });
     if (res.ok) {
-      const key = await this.fetchPublicKey();
-      if (key && !(await verifyDomainFile(res.licenseFile, key))) {
+      const key = await this.resolveKeyForKid(res.licenseFile.kid);
+      if (!key) return { ok: false, reason: 'NO_PUBLIC_KEY', message: '无法获取验签公钥，拒绝接受域名授权文件' };
+      if (!(await verifyDomainFile(res.licenseFile, key))) {
         return { ok: false, reason: 'SIGNATURE_INVALID', message: '域名授权文件验签失败' };
       }
     }
@@ -302,9 +338,20 @@ export class LicenseClient {
     });
   }
 
-  /** 域名解绑（换域名时用，释放一个额度）。 */
-  async deactivateDomain(domain: string, reason?: string): Promise<ClientResult<{ valid: boolean; domainCount: number }>> {
-    return this.request('/api/v1/domain/deactivate', { domain, ...(reason ? { reason } : {}) });
+  /**
+   * 域名解绑（换域名时用，释放一个额度）。
+   * accessToken 必填：服务端 C3 要求持 activate 签发的 domain-client 令牌。
+   */
+  async deactivateDomain(
+    domain: string,
+    accessToken: string,
+    reason?: string,
+  ): Promise<ClientResult<{ valid: boolean; domainCount: number }>> {
+    return this.request('/api/v1/domain/deactivate', {
+      domain,
+      accessToken,
+      ...(reason ? { reason } : {}),
+    });
   }
 
   async requestOffline(device: DeviceInfo, licenseKey?: string): Promise<ClientResult<{ requestCode: string }>> {
@@ -318,8 +365,9 @@ export class LicenseClient {
   async activateOffline(responseCode: string): Promise<ClientResult<{ licenseFile: LicenseFile }>> {
     const res = await this.request<{ licenseFile: LicenseFile }>('/api/v1/offline/activate', { responseCode });
     if (res.ok) {
-      const key = await this.fetchPublicKey();
-      if (key && !(await verifyLicenseFile(res.licenseFile, key))) {
+      const key = await this.resolveKeyForKid(res.licenseFile.kid);
+      if (!key) return { ok: false, reason: 'NO_PUBLIC_KEY', message: '无法获取验签公钥，拒绝接受响应码授权文件' };
+      if (!(await verifyLicenseFile(res.licenseFile, key))) {
         return { ok: false, reason: 'SIGNATURE_INVALID', message: '响应码验签失败' };
       }
     }
@@ -328,7 +376,7 @@ export class LicenseClient {
 
   /** 纯离线判断：不联网，直接用授权文件 + 内置公钥判断当前是否可用。 */
   async checkOffline(file: LicenseFile, now = Date.now()): Promise<{ valid: boolean; reason?: string; daysLeft?: number }> {
-    const key = await this.fetchPublicKey();
+    const key = this.cachedKeys?.get(file.kid) ?? this.cachedKey ?? (await this.fetchPublicKey());
     if (!key) return { valid: false, reason: 'NO_PUBLIC_KEY' };
     if (!(await verifyLicenseFile(file, key))) return { valid: false, reason: 'SIGNATURE_INVALID' };
     if (file.perpetual || !file.expiresAt) return { valid: true };
@@ -345,7 +393,8 @@ export class LicenseClient {
  * 例：Express/Nest 里传 §req.headers§ 即可。
  */
 export function currentDomainFromHeaders(headers: Record<string, string | string[] | undefined>): string {
-  const raw = headers['x-forwarded-host'] ?? headers.host ?? headers[':authority'];
+  // host 优先（直连更可信），仅在缺失时才回退到可伪造的 x-forwarded-host
+  const raw = headers.host ?? headers['x-forwarded-host'] ?? headers[':authority'];
   const value = Array.isArray(raw) ? raw[0] : raw;
   return normalizeDomainClient(value ?? '');
 }

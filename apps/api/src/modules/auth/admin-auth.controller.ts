@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Audit, Audience, ClientIp, CurrentUser, Public, Roles, UserAgent } from '../../common/decorators';
 import type { RequestUser } from '../../common/auth-context';
 import { AdminAuthService } from './admin-auth.service';
@@ -30,6 +31,7 @@ export class AdminAuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: '管理员登录（启用双因素时需带 totp）' })
   login(@Body() dto: LoginDto, @ClientIp() ip: string, @UserAgent() ua: string) {
     return this.auth.login({ ...dto, ip, userAgent: ua });
@@ -59,7 +61,7 @@ export class AdminAuthController {
   @Audit({ action: 'admin.password_changed', targetType: 'admin', recordBody: false })
   @ApiOperation({ summary: '修改自己的密码' })
   changePassword(@CurrentUser() user: RequestUser, @Body() dto: ChangePasswordDto) {
-    return this.auth.changePassword(user.id, dto);
+    return this.auth.changePassword(user.id, dto, user.sessionId);
   }
 
   @Post('2fa/setup')

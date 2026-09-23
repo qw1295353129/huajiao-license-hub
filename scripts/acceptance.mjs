@@ -270,9 +270,17 @@ try {
   check('同一域名不能被两张授权占用',
     ddup.body?.failedDomains?.[0]?.message?.includes('占用') === true, ddup.body?.failedDomains?.[0]?.message);
 
+  // 解绑需持 activate 签发的 domain-client accessToken（C3）：先激活 second 再解绑
+  const dactSecond = await call('/api/v1/domain/activate', { headers: { 'X-Api-Key': apiKey },
+    body: { domain: 'second.acceptance.com', product: 'acceptance-app' } });
   const doff = await call('/api/v1/domain/deactivate', { headers: { 'X-Api-Key': apiKey },
-    body: { domain: 'second.acceptance.com', reason: '验收结束' } });
-  check('域名解绑释放额度', doff.status === 201 && doff.body?.domainCount === 1);
+    body: {
+      domain: 'second.acceptance.com',
+      reason: '验收结束',
+      accessToken: dactSecond.body?.accessToken,
+    } });
+  check('域名解绑释放额度', doff.status === 201 && doff.body?.domainCount === 1,
+    'HTTP ' + doff.status + ' ' + JSON.stringify(doff.body).slice(0, 200));
 
   const dlist = await call('/api/admin/domain-licenses/' + dl.body.license.id, { method: 'GET', token: adminToken });
   const activeDomains = (dlist.body.domains ?? []).filter((row) => row.status === 'active');

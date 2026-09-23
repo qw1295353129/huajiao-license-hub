@@ -47,7 +47,12 @@ export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionC
 export const ClientIp = createParamDecorator((_data: unknown, ctx: ExecutionContext): string => {
   const request = ctx.switchToHttp().getRequest<{ ip?: string; headers: Record<string, string | string[] | undefined> }>();
   const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) return forwarded.split(',')[0].trim();
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    // 取最右一跳：由最近的可信代理（nginx $remote_addr 覆盖 / append）写入，
+    // 而不是客户端可伪造的最左段（N25）。
+    const hops = forwarded.split(',').map((part) => part.trim()).filter(Boolean);
+    if (hops.length > 0) return hops[hops.length - 1];
+  }
   return request.ip ?? 'unknown';
 });
 

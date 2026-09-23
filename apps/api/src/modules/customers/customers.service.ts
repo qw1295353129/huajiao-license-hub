@@ -108,6 +108,8 @@ export class CustomersService {
       name: dto.name?.trim() || email.split('@')[0],
       passwordHash: dto.password ? this.crypto.hashPassword(dto.password) : null,
       notes: dto.notes ?? null,
+      // 管理员代建的账号视为已验证：邮箱由运营者录入，可直接按邮箱归属历史订单/授权
+      emailVerifiedAt: new Date(),
     }).returning();
     return this.toPublic(row);
   }

@@ -67,6 +67,8 @@ export const customers = pgTable('customers', {
   status: text('status').$type<CustomerStatus>().notNull().default('active'),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  failedAttempts: integer('failed_attempts').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
   unbindCount30d: integer('unbind_count_30d').notNull().default(0),
   unbindWindowStart: timestamp('unbind_window_start', { withTimezone: true }),
   notes: text('notes'),
@@ -228,6 +230,10 @@ export const licenseActivations = pgTable('license_activations', {
   uniqueIndex('license_activations_active_key')
     .on(t.licenseId, t.deviceId)
     .where(sql`status = 'active'`),
+  // 同一 (license, device) 至多一条待审批，防并发重复插入 pending（N18）
+  uniqueIndex('license_activations_pending_key')
+    .on(t.licenseId, t.deviceId)
+    .where(sql`status = 'pending'`),
   index('license_activations_license_idx').on(t.licenseId, t.status),
   index('license_activations_device_idx').on(t.deviceId),
 ]);
