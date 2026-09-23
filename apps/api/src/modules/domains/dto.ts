@@ -70,10 +70,13 @@ export class DomainActivateDto {
 export class DomainVerifyDto {
   @IsString() @MinLength(1) @MaxLength(300) domain!: string;
   @IsOptional() @IsString() @MaxLength(2048) accessToken?: string;
+  @IsOptional() @IsString() @MaxLength(60) product?: string;
   @IsOptional() @IsString() @MaxLength(300) userAgent?: string;
 }
 
 export class DomainDeactivateDto {
   @IsString() @MinLength(1) @MaxLength(300) domain!: string;
+  /** activate 返回的 domain-client 短期令牌：解绑必须持有效令牌 */
+  @IsString() @MinLength(1) @MaxLength(2048) accessToken!: string;
   @IsOptional() @IsString() @MaxLength(200) reason?: string;
 }

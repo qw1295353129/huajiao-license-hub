@@ -37,6 +37,53 @@ describe('CryptoService', () => {
     assert.notEqual(crypto.blindIndex('AAA', 'license'), crypto.blindIndex('AAA', 'redeem'));
     assert.equal(crypto.blindIndex('AAA').length, 64);
     assert.ok(!crypto.blindIndex('AAA').includes('AAA'));
+    // 命名空间进入 HMAC 输入：同值不同 namespace 不同哈希（apikey 与 license 隔离）
+    assert.notEqual(crypto.blindIndex('SameValue', 'apikey'), crypto.blindIndex('SameValue', 'auth-token'));
+    // N6：auth-token 大小写敏感，大小写变体不得命中同一哈希
+    assert.notEqual(crypto.blindIndex('AbC123', 'auth-token'), crypto.blindIndex('aBc123', 'auth-token'));
+    assert.notEqual(crypto.blindIndex('AbC123', 'offline-code'), crypto.blindIndex('aBc123', 'offline-code'));
+    assert.equal(crypto.blindIndex('AbC123', 'apikey'), crypto.blindIndex('aBc123', 'apikey'));
+  });
+
+  it('compareSecret 恒定时间比对：全等才 true，大小写/长度差异为 false', () => {
+    assert.equal(crypto.compareSecret('abcdef', 'abcdef'), true);
+    assert.equal(crypto.compareSecret('abcdef', 'ABCDEF'), false);
+    assert.equal(crypto.compareSecret('abcdef', 'abcde'), false);
+    assert.equal(crypto.compareSecret('', ''), true);
+  });
+
+  it('生产环境缺少 BOOTSTRAP_ADMIN_PASSWORD 时 loadConfig 抛错', () => {
+    const prodBase = {
+      NODE_ENV: 'production',
+      DATA_KEY: Buffer.alloc(32, 1).toString('base64'),
+      JWT_SECRET: 'prod-jwt-secret-0123456789abcdefghijklmn',
+      LICENSE_PEPPER: 'prod-license-pepper-0123456789abcdef',
+    };
+    assert.throws(
+      () => loadConfig({ ...prodBase }),
+      /BOOTSTRAP_ADMIN_PASSWORD/,
+    );
+    const ok = loadConfig({ ...prodBase, BOOTSTRAP_ADMIN_PASSWORD: 'S3cure-Admin-Pass!' });
+    assert.equal(ok.bootstrap.password, 'S3cure-Admin-Pass!');
+    // 开发环境保留回退
+    const dev = loadConfig({ NODE_ENV: 'development' });
+    assert.equal(dev.bootstrap.password, 'Admin@12345');
+  });
+
+  it('生产环境 DATA_KEY 长度不是 32 字节时抛错（开发环境补齐）', () => {
+    const prodBase = {
+      NODE_ENV: 'production',
+      JWT_SECRET: 'prod-jwt-secret-0123456789abcdefghijklmn',
+      LICENSE_PEPPER: 'prod-license-pepper-0123456789abcdef',
+      BOOTSTRAP_ADMIN_PASSWORD: 'S3cure-Admin-Pass!',
+    };
+    assert.throws(
+      () => loadConfig({ ...prodBase, DATA_KEY: Buffer.alloc(16, 1).toString('base64') }),
+      /DATA_KEY/,
+    );
+    // 开发环境：非 32 字节口令 pad 到 32 字节而不抛
+    const dev = loadConfig({ NODE_ENV: 'development', DATA_KEY: 'short-secret' });
+    assert.equal(dev.security.dataKey.length, 32);
   });
 
   it('Ed25519 签名可被验签，改一个字节即失败', () => {

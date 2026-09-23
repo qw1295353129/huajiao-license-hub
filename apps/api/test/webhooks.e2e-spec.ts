@@ -100,6 +100,22 @@ describe('Webhook 投递与定时任务（e2e）', () => {
     assert.equal(emptyEvents.status, 400);
   });
 
+  it('内网 / 元数据 / localhost 目标被拒绝（SSRF 防护）', async () => {
+    for (const url of [
+      'http://169.254.169.254/latest/meta-data',
+      'http://10.0.0.8/hook',
+      'http://192.168.1.10/hook',
+      'http://172.16.0.1/hook',
+      'http://localhost/hook',
+      'http://foo.local/hook',
+      'ftp://127.0.0.1/hook',
+    ]) {
+      const res = await request(server).post('/api/admin/webhooks').set(admin())
+        .send({ url, events: ['license.created'] });
+      assert.equal(res.status, 400, '应拒绝：' + url + '，实际 ' + res.status + ' ' + JSON.stringify(res.body));
+    }
+  });
+
   it('发码事件入队，手动触发投递后接收端验签通过', async () => {
     received = [];
     const license = await request(server).post('/api/admin/licenses').set(admin())

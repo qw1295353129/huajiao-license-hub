@@ -71,7 +71,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('DATA_KEY 必须是 base64 字符串');
   }
   if (dataKey.length !== 32) {
-    // 允许非 base64 的 32 字符口令：用 scrypt 派生，避免用户配置失败
+    // 生产环境必须是严格 32 字节密钥，禁止静默补齐/截断（N22）
+    if (isProd) throw new Error('DATA_KEY 解码后必须是 32 字节（base64 编码 44 字符）');
+    // 仅开发环境：允许非 base64 的 32 字符口令，补齐/截断到 32 字节
     dataKey = Buffer.from(rawDataKey.padEnd(32, '0').slice(0, 32), 'utf8');
   }
 
@@ -115,7 +117,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
     bootstrap: {
       email: env.BOOTSTRAP_ADMIN_EMAIL ?? 'admin@licensehub.local',
-      password: env.BOOTSTRAP_ADMIN_PASSWORD ?? 'Admin@12345',
+      // 生产必须显式设置初始管理员密码，且禁止沿用公开示例口令（C1）
+      password: (() => {
+        const password = required('BOOTSTRAP_ADMIN_PASSWORD', env.BOOTSTRAP_ADMIN_PASSWORD, isProd, 'Admin@12345');
+        if (isProd && password === 'Admin@12345') {
+          throw new Error('BOOTSTRAP_ADMIN_PASSWORD 不能使用默认示例口令 Admin@12345');
+        }
+        return password;
+      })(),
     },
 
     smtp: {

@@ -447,6 +447,10 @@ export class LicensesService {
     if (current.status === next) {
       throw AppError.conflict('授权已处于「' + next + '」状态');
     }
+    // N11：resume 只允许从 suspended/expired 恢复；banned/revoked 是终态，不得复活
+    if (action === 'resume' && current.status !== 'suspended' && current.status !== 'expired') {
+      throw AppError.conflict('仅「暂停/过期」状态的授权可以恢复，当前状态：' + current.status);
+    }
     const patch: Record<string, unknown> = { status: next, updatedAt: new Date() };
     if (action === 'revoke' || action === 'ban') {
       patch.revokedAt = new Date();
@@ -690,21 +694,22 @@ export class LicensesService {
     return { ok: true, keyMasked: current.keyMasked };
   }
 
-  /** 批量删除（按 id 数组），返回成功与失败明细。 */
+  /** 批量删除（按 id 数组），返回成功与失败明细；逐条写审计（与单删一致）。 */
   async removeMany(ids: string[], actor: { id?: string; email?: string }) {
     const deleted: string[] = [];
     const failed: { id: string; message: string }[] = [];
     for (const id of ids) {
       try {
-        const current = await this.db.select({ keyMasked: licenses.keyMasked }).from(licenses).where(eq(licenses.id, id)).limit(1);
-        if (current.length === 0) { failed.push({ id, message: '不存在' }); continue; }
+        const exists = await this.db.select({ id: licenses.id }).from(licenses).where(eq(licenses.id, id)).limit(1);
+        if (exists.length === 0) { failed.push({ id, message: '不存在' }); continue; }
+        const snapshot = await this.get(id);
         await this.db.delete(licenses).where(eq(licenses.id, id));
-        deleted.push(current[0].keyMasked);
+        await this.auditDelete(id, snapshot, actor);
+        deleted.push(snapshot.keyMasked);
       } catch (error) {
         failed.push({ id, message: error instanceof Error ? error.message : String(error) });
       }
     }
-    void actor;
     return { ok: true, deletedCount: deleted.length, deleted, failed };
   }
 

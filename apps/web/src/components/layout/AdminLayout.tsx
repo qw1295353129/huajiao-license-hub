@@ -7,13 +7,17 @@ import {
   BarChart3, Boxes, FileClock, Globe, KeyRound, KeySquare, LayoutDashboard, LogOut, Menu, Receipt, Settings,
   ShieldCheck, Ticket, Users, Webhook, X,
 } from 'lucide-react';
+import { ROLE_RANK, type AdminRole } from '@license-hub/shared';
 import { useAuth } from '@/lib/auth';
 
 interface NavItem {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
+  /** 仅 owner 可见 */
   ownerOnly?: boolean;
+  /** 最低可见角色，默认 support（与后端 @Roles 对齐） */
+  minRole?: AdminRole;
 }
 
 const NAV: NavItem[] = [
@@ -27,10 +31,18 @@ const NAV: NavItem[] = [
   { to: '/admin/devices', label: '设备', icon: BarChart3 },
   { to: '/admin/api-keys', label: '接口密钥', icon: KeySquare },
   { to: '/admin/webhooks', label: 'Webhook', icon: Webhook },
-  { to: '/admin/audit', label: '审计日志', icon: FileClock },
+  { to: '/admin/audit', label: '审计日志', icon: FileClock, minRole: 'admin' },
   { to: '/admin/settings', label: '设置', icon: Settings },
-  { to: '/admin/team', label: '团队', icon: ShieldCheck },
+  { to: '/admin/team', label: '团队', icon: ShieldCheck, ownerOnly: true },
 ];
+
+/** 按角色过滤导航：role 缺失时不过滤；与后端 RolesGuard 的 ROLE_RANK 规则一致。 */
+function canAccessNav(item: NavItem, role?: AdminRole): boolean {
+  if (!role) return true;
+  if (item.ownerOnly) return role === 'owner';
+  const min = item.minRole ?? 'support';
+  return ROLE_RANK[role] >= ROLE_RANK[min];
+}
 
 export function AdminLayout() {
   const { user, logout } = useAuth();
@@ -42,6 +54,8 @@ export function AdminLayout() {
     navigate('/login', { replace: true });
   };
 
+  const navItems = NAV.filter((item) => canAccessNav(item, user?.role));
+
   const sidebar = (
     <nav className="flex h-full flex-col gap-1 p-3">
       <div className="mb-3 flex items-center gap-2 px-2 py-1">
@@ -51,7 +65,7 @@ export function AdminLayout() {
           <p className="text-[11px] opacity-50">授权管理系统</p>
         </div>
       </div>
-      {NAV.map((item) => (
+      {navItems.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}

@@ -77,6 +77,13 @@ describe('管理端认证（e2e）', () => {
     for (let i = 0; i < 5; i += 1) {
       await request(server).post('/api/admin/auth/login').send({ email: TEST_ADMIN.email, password: 'WrongPass' + i });
     }
+    // 密码错误时不泄露锁定状态（N5）
+    const wrongWhileLocked = await request(server).post('/api/admin/auth/login')
+      .send({ email: TEST_ADMIN.email, password: 'StillWrong1' });
+    assert.equal(wrongWhileLocked.status, 401);
+    assert.equal(wrongWhileLocked.body.code, 'INVALID_CREDENTIALS');
+
+    // 密码正确时才暴露锁定状态
     const res = await request(server).post('/api/admin/auth/login').send(TEST_ADMIN);
     assert.equal(res.status, 423);
     assert.equal(res.body.code, 'ACCOUNT_LOCKED');
@@ -146,12 +153,16 @@ describe('管理端认证（e2e）', () => {
     assert.equal(disable.status, 201);
   });
 
-  it('改密后旧会话被撤销，新密码可登录', async () => {
+  it('改密后旧会话被撤销，当前会话保留，新密码可登录', async () => {
     const res = await request(server).post('/api/admin/auth/password')
       .set('Authorization', 'Bearer ' + accessToken)
       .send({ currentPassword: TEST_ADMIN.password, newPassword: 'NewPass12345' });
     assert.equal(res.status, 201);
     assert.ok(res.body.revokedSessions >= 1);
+
+    // 当前会话（keepSessionId）在改密后仍可用
+    const stillMe = await request(server).get('/api/admin/auth/me').set('Authorization', 'Bearer ' + accessToken);
+    assert.equal(stillMe.status, 200);
 
     const stale = await request(server).post('/api/admin/auth/refresh').send({ refreshToken });
     assert.equal(stale.status, 401);

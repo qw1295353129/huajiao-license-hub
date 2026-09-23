@@ -180,13 +180,32 @@ export function LicensesPage() {
               variant="ghost"
               size="sm"
               onPress={() => {
-                const url = '/api/admin/licenses/export' + qs({
-                  productId: productId ? String(productId) : undefined,
-                  status: status ? String(status) : undefined,
-                  q: search || undefined,
-                });
-                window.open(url, '_blank');
-                toast.info('导出已开始', { description: '默认不含明文授权码；需要明文请用「导出明文」' });
+                // 导出走浏览器下载，带上 Authorization 头需要用 fetch + blob（window.open 无法带 Bearer）
+                void (async () => {
+                  try {
+                    const url = '/api/admin/licenses/export' + qs({
+                      productId: productId ? String(productId) : undefined,
+                      status: status ? String(status) : undefined,
+                      q: search || undefined,
+                    });
+                    const res = await fetch(url, {
+                      headers: {
+                        Authorization: 'Bearer ' + (JSON.parse(localStorage.getItem('licensehub.tokens') ?? '{}').accessToken ?? ''),
+                      },
+                    });
+                    if (!res.ok) throw new Error('导出失败：' + res.status);
+                    const blob = await res.blob();
+                    const downloadUrl = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = 'licenses.csv';
+                    link.click();
+                    URL.revokeObjectURL(downloadUrl);
+                    toast.info('导出已开始', { description: '默认不含明文授权码；需要明文请用「导出明文」' });
+                  } catch (error) {
+                    toast.danger('导出失败', { description: error instanceof Error ? error.message : '' });
+                  }
+                })();
               }}
             >
               <Download size={14} /> 导出 CSV

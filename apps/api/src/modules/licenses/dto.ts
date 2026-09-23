@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsISO8601, IsOptional, IsString,
   IsUUID, Max, MaxLength, Min, MinLength,
@@ -104,8 +104,18 @@ export class ListLicensesDto extends PaginationDto {
 }
 
 export class ExportLicensesDto extends ListLicensesDto {
-  /** 是否导出授权码明文（默认只导出掩码，导出明文会写审计） */
-  @IsOptional() @IsBoolean() @Type(() => Boolean)
+  /**
+   * 是否导出授权码明文（默认只导出掩码，导出明文会写审计）。
+   * 注意：ValidationPipe 开了 enableImplicitConversion，design:type=Boolean 会先把
+   * "false" 预转成 true 再进 @Transform，因此必须从原始 obj 取值判断。
+   */
+  @IsOptional() @IsBoolean()
+  @Transform(({ value, obj }) => {
+    const raw = obj && typeof obj === 'object' && 'reveal' in obj
+      ? (obj as { reveal: unknown }).reveal
+      : value;
+    return raw === true || raw === 'true';
+  })
   reveal?: boolean;
 }
 

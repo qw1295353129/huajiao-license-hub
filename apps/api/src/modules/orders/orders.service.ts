@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
@@ -27,6 +27,8 @@ export interface CallbackResult {
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger('Orders');
+  /** 发码互斥：按 orderId 串行化 issueMissingLicenses，防止并发双发（进程内）。 */
+  private readonly issueLocks = new Map<string, Promise<string[]>>();
 
   constructor(
     @Inject(DB) private readonly handle: DatabaseHandle,
@@ -217,7 +219,9 @@ export class OrdersService {
 
   /**
    * 标记已支付并自动发码。
-   * 幂等保证：状态更新用条件更新（status='pending'），并发/重复回调只有一个能改成功。
+   * 幂等：条件更新 status='pending'→'paid' 只有一方能赢；
+   * 赢家负责占优惠券额度并发码；alreadyPaid 路径仍调用 issueMissingLicenses 自愈
+   * （崩溃/优惠券异常导致的 paid-but-unissued，重试回调可补齐）。
    */
   async markPaid(orderId: string, dto: MarkPaidDto): Promise<{ order: Awaited<ReturnType<OrdersService['detail']>>; licenses: string[]; alreadyPaid: boolean }> {
     const order = await this.findById(orderId);
@@ -235,14 +239,23 @@ export class OrdersService {
       .returning({ id: orders.id });
 
     const alreadyPaid = updated.length === 0;
+    let issued: string[] = [];
     if (!alreadyPaid && order.couponId) {
-      await this.db.update(coupons)
+      // N14：原子占用一次使用额度；失败不再抛出阻断发码（订单已 paid，优先履约）
+      const claimed = await this.db.update(coupons)
         .set({ usedCount: sql`${coupons.usedCount} + 1` })
-        .where(eq(coupons.id, order.couponId));
+        .where(and(
+          eq(coupons.id, order.couponId),
+          sql`(${coupons.maxUses} is null or ${coupons.usedCount} < ${coupons.maxUses})`,
+        ))
+        .returning({ id: coupons.id });
+      if (claimed.length === 0) {
+        this.logger.warn('优惠券额度不足或占用失败，仍继续发码：order=' + order.orderNo);
+      }
     }
-
-    const issued = await this.issueMissingLicenses(orderId);
-    if (!alreadyPaid) {
+    // 赢家与自愈路径都发码：issueMissingLicenses 只处理 license_id IS NULL，且进程内按 orderId 串行
+    issued = await this.issueMissingLicenses(orderId);
+    if (!alreadyPaid && issued.length > 0) {
       await this.webhooks.emit('order.paid', {
         orderId,
         orderNo: order.orderNo,
@@ -255,8 +268,22 @@ export class OrdersService {
     return { order: await this.detail(orderId), licenses: issued, alreadyPaid };
   }
 
-  /** 为订单中尚无授权的条目发码（支持重复调用补齐）。 */
+  /**
+   * 为订单中尚无授权的条目发码（支持重复调用补齐：支付回调重试 / 管理端手动补发）。
+   * 进程内按 orderId 串行化，配合条件更新进一步降低并发双发概率。
+   */
   async issueMissingLicenses(orderId: string): Promise<string[]> {
+    const previous = this.issueLocks.get(orderId) ?? Promise.resolve<string[]>([]);
+    const run = previous.catch(() => [] as string[]).then(() => this.issueMissingLicensesNow(orderId));
+    this.issueLocks.set(orderId, run);
+    try {
+      return await run;
+    } finally {
+      if (this.issueLocks.get(orderId) === run) this.issueLocks.delete(orderId);
+    }
+  }
+
+  private async issueMissingLicensesNow(orderId: string): Promise<string[]> {
     const order = await this.findById(orderId);
     const items = await this.db.select().from(orderItems)
       .where(and(eq(orderItems.orderId, orderId), isNull(orderItems.licenseId)));
@@ -266,6 +293,7 @@ export class OrdersService {
     const issuedLicenseIds: string[] = [];
 
     for (const item of items) {
+      const unitIds: string[] = [];
       for (let i = 0; i < item.quantity; i += 1) {
         const created = await this.licenses.create({
           productId: item.productId,
@@ -275,11 +303,24 @@ export class OrdersService {
           notes: '订单 ' + order.orderNo,
         }, { email: 'system' });
         issuedKeys.push(created.keyFormatted);
+        unitIds.push(created.license.id);
         issuedLicenseIds.push(created.license.id);
       }
+      // N19：quantity>1 时拆成多行（每行 quantity=1 且各链一张授权），
+      // 保证订单行与授权一一对应（退款/明细能拿到全部授权）。
       await this.db.update(orderItems)
-        .set({ licenseId: issuedLicenseIds[issuedLicenseIds.length - 1] })
+        .set({ licenseId: unitIds[0], quantity: 1 })
         .where(eq(orderItems.id, item.id));
+      for (let i = 1; i < unitIds.length; i += 1) {
+        await this.db.insert(orderItems).values({
+          orderId: item.orderId,
+          productId: item.productId,
+          planId: item.planId,
+          quantity: 1,
+          unitPriceCents: item.unitPriceCents,
+          licenseId: unitIds[i],
+        });
+      }
     }
 
     // 订单发码后把授权归到客户名下
@@ -354,6 +395,7 @@ export class OrdersService {
   /**
    * 第三方支付回调：HMAC 验签 + 事件去重 + 幂等处理。
    * 签名规则：X-LH-Signature: sha256=<hex(hmac_sha256(secret, rawBody))>
+   * 校验顺序：rawBody → 恒定时间验签 → 金额核对 → 事件去重 → 处理（金额校验在去重之前，避免失败也烧掉 eventId）。
    */
   async handleCallback(
     provider: string,
@@ -361,13 +403,32 @@ export class OrdersService {
     rawBody: string,
     signature: string | undefined,
   ): Promise<CallbackResult> {
+    if (!rawBody) {
+      throw AppError.unauthorized(ErrorCodes.UNAUTHENTICATED, '回调缺少原始请求体，无法验签');
+    }
     const secret = await this.settings.getSecret('payments.' + provider + '.secret');
     if (!secret) {
       throw new AppError(ErrorCodes.SETTINGS_INVALID, '未配置 ' + provider + ' 的回调签名密钥', 400);
     }
+    const provided = (signature ?? '').replace(/^sha256=/, '');
     const computed = createHmac('sha256', secret).update(rawBody).digest('hex');
-    if (!signature || computed !== signature.replace(/^sha256=/, '')) {
+    const computedBuf = Buffer.from(computed, 'hex');
+    const providedBuf = Buffer.from(provided, 'hex');
+    // N13：恒定时间比较（先比长度，timingSafeEqual 要求等长 Buffer）
+    if (providedBuf.length !== computedBuf.length || providedBuf.length === 0 || !timingSafeEqual(computedBuf, providedBuf)) {
       throw AppError.unauthorized(ErrorCodes.UNAUTHENTICATED, '回调签名校验失败');
+    }
+
+    const order = payload.orderNo ? await this.findByOrderNo(payload.orderNo) : null;
+
+    // N13：金额核对 —— 订单应付 > 0 时，回调必须带 amountCents 且与订单金额一致
+    if (payload.status === 'paid' && order && order.totalCents > 0) {
+      if (payload.amountCents === undefined || payload.amountCents === null) {
+        throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '支付回调缺少 amountCents');
+      }
+      if (payload.amountCents !== order.totalCents) {
+        throw AppError.badRequest(ErrorCodes.VALIDATION_FAILED, '支付回调金额与订单金额不一致');
+      }
     }
 
     // 去重：同一 provider + eventId 只处理一次
@@ -381,7 +442,6 @@ export class OrdersService {
       return { ok: true, duplicate: true, orderNo: payload.orderNo };
     }
 
-    const order = payload.orderNo ? await this.findByOrderNo(payload.orderNo) : null;
     if (!order) {
       return { ok: false, duplicate: false };
     }

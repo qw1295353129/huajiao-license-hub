@@ -41,9 +41,20 @@ export class ApiKeyGuard implements CanActivate {
       throw AppError.unauthorized(ErrorCodes.API_KEY_INVALID, '缺少 X-Api-Key 请求头');
     }
 
-    const lookup = this.crypto.blindIndex(key.trim(), 'apikey');
+    const presented = key.trim();
+    const lookup = this.crypto.blindIndex(presented, 'apikey');
     const [row] = await this.handle.db.select().from(apiKeys).where(eq(apiKeys.keyLookup, lookup)).limit(1);
     if (!row) throw AppError.unauthorized(ErrorCodes.API_KEY_INVALID, 'API Key 无效');
+    // 盲索引会 toUpperCase，大小写变体也能命中同一行：解密后全量比对，大小写不匹配即拒绝（N6）
+    let decrypted: string;
+    try {
+      decrypted = this.crypto.decrypt(row.keyEnc);
+    } catch {
+      throw AppError.unauthorized(ErrorCodes.API_KEY_INVALID, 'API Key 无效');
+    }
+    if (!this.crypto.compareSecret(decrypted, presented)) {
+      throw AppError.unauthorized(ErrorCodes.API_KEY_INVALID, 'API Key 无效');
+    }
     if (row.status !== 'active') throw AppError.forbidden('API Key 已被吊销');
     if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
       throw AppError.unauthorized(ErrorCodes.API_KEY_INVALID, 'API Key 已过期');

@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { and, count, desc, eq, inArray, isNull, like, or, sql, type SQL } from 'drizzle-orm';
 import type { Entitlements, LicenseStatus } from '@license-hub/shared';
 import { domainMatches, normalizeDomain } from '@license-hub/shared';
@@ -20,6 +21,12 @@ import type {
 } from './dto';
 
 const CLIENT_TOKEN_AUDIENCE = 'domain-client';
+
+/** 域名客户端调用上下文：apiKey 绑定了产品时必须约束在该产品内（C3/N20）。 */
+export interface DomainClientContext {
+  ip?: string;
+  apiKeyProductId?: string | null;
+}
 
 export interface DomainLicenseView {
   id: string;
@@ -62,6 +69,7 @@ export class DomainLicensesService {
     private readonly mail: NotificationsService,
     private readonly webhooks: WebhooksService,
     private readonly audit: AuditService,
+    private readonly jwt: JwtService,
   ) {}
 
   private get db() {
@@ -124,6 +132,47 @@ export class DomainLicensesService {
       { sub: domainLicenseId, domain, aud: CLIENT_TOKEN_AUDIENCE },
       ttlHours * 3600,
     );
+  }
+
+  /** API Key 绑定了产品时：解析出的产品必须一致（C3）。 */
+  private apiKeyProductMatches(
+    resolved: { product: { id: string } },
+    apiKeyProductId: string | null | undefined,
+  ): boolean {
+    return !apiKeyProductId || resolved.product.id === apiKeyProductId;
+  }
+
+  /** API Key 绑定产品且请求未带 product 时，用该产品的 slug 过滤（C3/N20）。 */
+  private async apiKeyProductSlug(productId: string | null | undefined): Promise<string | undefined> {
+    if (!productId) return undefined;
+    const product = await this.products.findById(productId);
+    return product.slug;
+  }
+
+  /** 客户端令牌校验：aud 必须是 domain-client，且签发给该授权与该域名。 */
+  private async verifyClientToken(
+    accessToken: string,
+    expect: { domainLicenseId: string; domain: string },
+  ): Promise<void> {
+    try {
+      const payload = await this.jwt.verifyAsync<{ sub: string; domain: string; aud: string }>(accessToken);
+      if (payload.aud !== CLIENT_TOKEN_AUDIENCE) throw new Error('audience mismatch');
+      if (payload.sub !== expect.domainLicenseId) throw new Error('subject mismatch');
+      if (payload.domain !== expect.domain) throw new Error('domain mismatch');
+    } catch {
+      throw AppError.unauthorized(ErrorCodes.UNAUTHENTICATED, '访问令牌无效或不属于该域名');
+    }
+  }
+
+  /** 门户归属：邮箱兜底仅对已验证邮箱开放（否则任意人可注册受害者邮箱抢走域名授权，C2）。 */
+  private async ownsByVerifiedEmail(customerId: string, customerEmail: string | null): Promise<boolean> {
+    if (!customerEmail) return false;
+    const [customer] = await this.db.select({
+      email: customers.email,
+      emailVerifiedAt: customers.emailVerifiedAt,
+    }).from(customers).where(eq(customers.id, customerId)).limit(1);
+    if (!customer?.emailVerifiedAt) return false;
+    return customer.email.toLowerCase() === customerEmail.toLowerCase();
   }
 
   private validateState(row: typeof domainLicenses.$inferSelect): { reason: Entitlements['reason']; message: string } | null {
@@ -362,6 +411,10 @@ export class DomainLicensesService {
     const target: Record<typeof action, LicenseStatus> = { revoke: 'revoked', suspend: 'suspended', resume: 'active', ban: 'banned' };
     const next = target[action];
     if (current.status === next) throw AppError.conflict('域名授权已处于「' + next + '」状态');
+    // resume 仅允许从 suspended 恢复：不得把 banned/revoked 复活（N11）
+    if (action === 'resume' && current.status !== 'suspended') {
+      throw AppError.conflict('仅「已暂停」的域名授权可以恢复（当前状态：' + current.status + '）');
+    }
     const patch: Record<string, unknown> = { status: next, updatedAt: new Date() };
     if (action === 'revoke' || action === 'ban') {
       patch.revokedAt = new Date();
@@ -491,19 +544,44 @@ export class DomainLicensesService {
       );
     }
 
-    const [row] = await this.db.insert(authorizedDomains).values({
-      domainLicenseId,
-      domain: parsed.domain,
-      domainRaw: dto.domain,
-      environment: dto.environment ?? 'production',
-      source: actor.type ?? 'admin',
-      metadata: actor.id ? { addedBy: actor.id } : {},
-    }).returning();
+    // 原子占额：条件更新防止并发 TOCTOU 超发（N9）
+    const claimed = await this.db.update(domainLicenses)
+      .set({ domainCount: sql`${domainLicenses.domainCount} + 1`, updatedAt: new Date() })
+      .where(and(
+        eq(domainLicenses.id, domainLicenseId),
+        sql`${domainLicenses.domainCount} < ${domainLicenses.maxDomains}`,
+      ))
+      .returning({ domainCount: domainLicenses.domainCount, maxDomains: domainLicenses.maxDomains });
+    if (claimed.length === 0) {
+      const [fresh] = await this.db.select().from(domainLicenses).where(eq(domainLicenses.id, domainLicenseId)).limit(1);
+      throw new AppError(
+        ErrorCodes.DOMAIN_LIMIT_REACHED,
+        '域名额度已用完（' + (fresh?.maxDomains ?? license.maxDomains) + ' 个），请先解绑不用的域名',
+        409,
+        { maxDomains: fresh?.maxDomains ?? license.maxDomains, domainCount: fresh?.domainCount ?? license.domainCount },
+      );
+    }
+    const domainCount = claimed[0].domainCount;
+    const maxDomains = claimed[0].maxDomains;
 
-    const domainCount = license.domainCount + 1;
-    await this.db.update(domainLicenses)
-      .set({ domainCount, updatedAt: new Date() })
-      .where(eq(domainLicenses.id, domainLicenseId));
+    let row: (typeof authorizedDomains.$inferSelect) | undefined;
+    try {
+      [row] = await this.db.insert(authorizedDomains).values({
+        domainLicenseId,
+        domain: parsed.domain,
+        domainRaw: dto.domain,
+        environment: dto.environment ?? 'production',
+        source: actor.type ?? 'admin',
+        metadata: actor.id ? { addedBy: actor.id } : {},
+      }).returning();
+    } catch (error) {
+      // 插入失败回滚占额，避免额度被白白吃掉
+      await this.db.update(domainLicenses)
+        .set({ domainCount: sql`${domainLicenses.domainCount} - 1`, updatedAt: new Date() })
+        .where(eq(domainLicenses.id, domainLicenseId));
+      throw error;
+    }
+    if (!row) throw AppError.conflict('域名绑定失败，请重试');
 
     await this.recordEvent({
       domainLicenseId,
@@ -519,10 +597,10 @@ export class DomainLicensesService {
       domain: parsed.domain,
       customerEmail: license.customerEmail,
       domainCount,
-      maxDomains: license.maxDomains,
+      maxDomains,
     }).catch(() => undefined);
 
-    return { ...row, domainCount, maxDomains: license.maxDomains };
+    return { ...row, domainCount, maxDomains };
   }
 
   /** 解绑域名（管理端与门户共用）。 */
@@ -592,13 +670,15 @@ export class DomainLicensesService {
     return rows.find((row) => domainMatches(domain, row.domain.domain, row.license.allowSubdomains)) ?? null;
   }
 
-  async activate(dto: DomainActivateDto, ctx: { ip?: string }) {
+  async activate(dto: DomainActivateDto, ctx: DomainClientContext) {
     const parsed = normalizeDomain(dto.domain);
     if (!parsed.valid) {
       throw AppError.badRequest(ErrorCodes.DOMAIN_INVALID, '域名格式不正确：' + (dto.domain || '(空)'), { reason: parsed.reason });
     }
-    const resolved = await this.resolveByDomain(parsed.domain, dto.product);
-    if (!resolved) {
+    // API Key 绑定产品且未显式传 product 时，按 API Key 的产品过滤（C3/N20）
+    const productFilter = dto.product ?? await this.apiKeyProductSlug(ctx.apiKeyProductId);
+    const resolved = await this.resolveByDomain(parsed.domain, productFilter);
+    if (!resolved || !this.apiKeyProductMatches(resolved, ctx.apiKeyProductId)) {
       throw new AppError(
         ErrorCodes.DOMAIN_NOT_AUTHORIZED,
         '域名 ' + parsed.domain + ' 尚未获得授权，请在服务商后台为该域名开通授权后重试',
@@ -655,17 +735,32 @@ export class DomainLicensesService {
     };
   }
 
-  async verify(dto: DomainVerifyDto): Promise<Entitlements> {
+  async verify(dto: DomainVerifyDto, ctx: Pick<DomainClientContext, 'apiKeyProductId'> = {}): Promise<Entitlements> {
     const parsed = normalizeDomain(dto.domain);
     if (!parsed.valid) {
       return { valid: false, reason: 'invalid_device', message: '域名格式不正确：' + dto.domain, domain: dto.domain };
     }
 
-    const resolved = await this.resolveByDomain(parsed.domain);
-    if (!resolved) {
+    // 传入 product 过滤（请求显式 product 优先，否则用 API Key 绑定的产品）（N20）
+    const productFilter = dto.product ?? await this.apiKeyProductSlug(ctx.apiKeyProductId);
+    const resolved = await this.resolveByDomain(parsed.domain, productFilter);
+    if (!resolved || !this.apiKeyProductMatches(resolved, ctx.apiKeyProductId)) {
       return { valid: false, reason: 'invalid_not_found', message: '域名未授权', domain: parsed.domain };
     }
     const { license, plan, product } = resolved;
+
+    // 携带 accessToken 时必须校验：domain-client 受众 + 绑定该授权/域名
+    if (dto.accessToken) {
+      try {
+        await this.verifyClientToken(dto.accessToken, {
+          domainLicenseId: license.id,
+          domain: resolved.domain.domain,
+        });
+      } catch {
+        return { valid: false, reason: 'invalid_device', message: '访问令牌无效', domain: resolved.domain.domain };
+      }
+    }
+
     const meta = {
       productSlug: product.slug,
       planCode: plan.code,
@@ -687,19 +782,39 @@ export class DomainLicensesService {
     return this.toEntitlements(license, meta);
   }
 
-  async deactivate(dto: DomainDeactivateDto) {
+  async deactivate(dto: DomainDeactivateDto, ctx: Pick<DomainClientContext, 'apiKeyProductId'> = {}) {
     const parsed = normalizeDomain(dto.domain);
     if (!parsed.valid) throw AppError.badRequest(ErrorCodes.DOMAIN_INVALID, '域名格式不正确');
-    const resolved = await this.resolveByDomain(parsed.domain);
-    if (!resolved) throw new AppError(ErrorCodes.DOMAIN_NOT_AUTHORIZED, '该域名未获得授权', 404);
+    const productFilter = await this.apiKeyProductSlug(ctx.apiKeyProductId);
+    const resolved = await this.resolveByDomain(parsed.domain, productFilter);
+    if (!resolved || !this.apiKeyProductMatches(resolved, ctx.apiKeyProductId)) {
+      throw new AppError(ErrorCodes.DOMAIN_NOT_AUTHORIZED, '该域名未获得授权', 404);
+    }
+    // 解绑必须持有签发给该域名的 domain-client 令牌（C3）
+    await this.verifyClientToken(dto.accessToken, {
+      domainLicenseId: resolved.license.id,
+      domain: resolved.domain.domain,
+    });
     return this.removeDomain(resolved.domain.id, { type: 'admin' }, dto.reason ?? 'client_request');
   }
 
   /* ------------------------------------------------ 门户（客户自助） */
 
   async listForCustomer(customerId: string, email: string) {
+    // 邮箱兜底仅对已验证邮箱开放（C2）
+    const [customer] = await this.db.select({
+      email: customers.email,
+      emailVerifiedAt: customers.emailVerifiedAt,
+    }).from(customers).where(eq(customers.id, customerId)).limit(1);
+    const emailVerified = Boolean(customer?.emailVerifiedAt);
+    const ownership = emailVerified
+      ? or(
+        eq(domainLicenses.customerId, customerId),
+        sql`lower(${domainLicenses.customerEmail}) = ${email.toLowerCase()}`,
+      )
+      : eq(domainLicenses.customerId, customerId);
     const rows = await this.baseSelect()
-      .where(or(eq(domainLicenses.customerId, customerId), sql`lower(${domainLicenses.customerEmail}) = ${email.toLowerCase()}`))
+      .where(ownership)
       .orderBy(desc(domainLicenses.createdAt));
     const ids = rows.map((row) => row.id);
     const domains = ids.length > 0
@@ -716,7 +831,7 @@ export class DomainLicensesService {
     const [license] = await this.db.select().from(domainLicenses).where(eq(domainLicenses.id, domainLicenseId)).limit(1);
     if (!license) throw AppError.notFound('域名授权不存在');
     const owns = license.customerId === customerId
-      || (license.customerEmail ?? '').toLowerCase() === email.toLowerCase();
+      || await this.ownsByVerifiedEmail(customerId, license.customerEmail);
     if (!owns) throw AppError.notFound('域名授权不存在或不属于当前账号');
 
     const parsed = normalizeDomain(domain);
@@ -739,7 +854,7 @@ export class DomainLicensesService {
     if (!row) throw AppError.notFound('域名绑定记录不存在');
     const [license] = await this.db.select().from(domainLicenses).where(eq(domainLicenses.id, row.domainLicenseId)).limit(1);
     const owns = license && (license.customerId === customerId
-      || (license.customerEmail ?? '').toLowerCase() === email.toLowerCase());
+      || await this.ownsByVerifiedEmail(customerId, license.customerEmail));
     if (!owns) throw AppError.notFound('域名授权不存在或不属于当前账号');
     return this.removeDomain(domainId, { id: customerId, email, type: 'customer' }, 'customer_self_service');
   }

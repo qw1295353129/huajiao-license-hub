@@ -46,6 +46,12 @@ describe('域名授权（独立体系，不依赖授权码）e2e', () => {
     const key = await request(server).post('/api/admin/api-keys').set(admin())
       .send({ name: '网站接入 Key', scopes: ['license:read', 'license:activate', 'license:verify', 'license:deactivate'] });
     apiKey = key.body.key;
+
+    // 预建客户（管理员代建视为邮箱已验证）：域名授权创建时按邮箱挂上 customerId，
+    // 门户侧归属校验不再放行未验证邮箱（C2）
+    const customer = await request(server).post('/api/admin/customers').set(admin())
+      .send({ email: 'webmaster@example.com', password: 'Webmaster123', name: '站长' });
+    assert.equal(customer.status, 201, JSON.stringify(customer.body));
   });
 
   after(async () => {
@@ -179,7 +185,10 @@ describe('域名授权（独立体系，不依赖授权码）e2e', () => {
     assert.equal(revoke.status, 201);
     const revoked = await request(server).post('/api/v1/domain/verify').set(withKey()).send({ domain: target });
     assert.equal(revoked.body.reason, 'invalid_revoked');
-    await request(server).post('/api/admin/domain-licenses/' + domainLicenseId + '/resume').set(admin()).send({});
+    // 吊销后不得直接 resume（N11：仅允许从 suspended 恢复）
+    const resumeAfterRevoke = await request(server).post('/api/admin/domain-licenses/' + domainLicenseId + '/resume')
+      .set(admin()).send({});
+    assert.equal(resumeAfterRevoke.status, 409, 'banned/revoked 不得 resume 复活');
   });
 
   it('延期与事件流', async () => {
@@ -198,10 +207,11 @@ describe('域名授权（独立体系，不依赖授权码）e2e', () => {
   });
 
   it('客户门户：可见自己的域名授权，并在额度内自助增删域名', async () => {
-    const register = await request(server).post('/api/portal/auth/register')
-      .send({ email: 'webmaster@example.com', password: 'Webmaster123', name: '站长' });
-    assert.equal(register.status, 201);
-    portalToken = register.body.tokens.accessToken;
+    // 客户已由管理端预建（邮箱视为已验证），这里登录而非注册
+    const login = await request(server).post('/api/portal/auth/login')
+      .send({ email: 'webmaster@example.com', password: 'Webmaster123' });
+    assert.equal(login.status, 201, JSON.stringify(login.body));
+    portalToken = login.body.tokens.accessToken;
     const auth = { Authorization: 'Bearer ' + portalToken };
 
     // 额度已满（2/2），先解绑一个
@@ -304,5 +314,60 @@ describe('域名授权（独立体系，不依赖授权码）e2e', () => {
     const rows = audit.body.items as Array<{ diff?: { before?: { releasedDomains?: string[] } } }>;
     const entry = rows.find((row) => (row.diff?.before?.releasedDomains ?? []).length > 0);
     assert.ok(entry, '审计应记录被释放的域名快照');
+  });
+
+  it('域名解绑必须携带签发给该域名的 accessToken（C3）', async () => {
+    const created = await request(server).post('/api/admin/domain-licenses').set(admin())
+      .send({ productId, planId, customerEmail: 'deact@example.com', domains: ['deact.example.com'] });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+
+    const missing = await request(server).post('/api/v1/domain/deactivate').set(withKey())
+      .send({ domain: 'deact.example.com' });
+    assert.equal(missing.status, 400, '缺少 accessToken 应被校验拒绝');
+
+    const act = await request(server).post('/api/v1/domain/activate').set(withKey())
+      .send({ domain: 'deact.example.com' });
+    assert.equal(act.status, 201, JSON.stringify(act.body));
+    const token = act.body.accessToken as string;
+    assert.ok(token);
+
+    const bad = await request(server).post('/api/v1/domain/deactivate').set(withKey())
+      .send({ domain: 'deact.example.com', accessToken: 'not-a-valid-token' });
+    assert.equal(bad.status, 401, '无效令牌应被拒绝');
+
+    const off = await request(server).post('/api/v1/domain/deactivate').set(withKey())
+      .send({ domain: 'deact.example.com', accessToken: token });
+    assert.equal(off.status, 201, JSON.stringify(off.body));
+    assert.equal(off.body.ok, true);
+  });
+
+  it('API Key 绑定产品后只能操作该产品的域名（C3/N20）', async () => {
+    const other = await request(server).post('/api/admin/products').set(admin())
+      .send({ slug: 'other-site-product', name: '另一网站产品', status: 'active' });
+    assert.equal(other.status, 201);
+    const bound = await request(server).post('/api/admin/api-keys').set(admin())
+      .send({
+        name: '绑定产品的 Key',
+        productId: other.body.id,
+        scopes: ['license:read', 'license:activate', 'license:verify', 'license:deactivate'],
+      });
+    assert.equal(bound.status, 201);
+    const boundKey = bound.body.key as string;
+
+    const fresh = await request(server).post('/api/admin/domain-licenses').set(admin())
+      .send({ productId, planId, domains: ['cross-product.example.com'] });
+    assert.equal(fresh.status, 201);
+
+    // site-product 的域名 + 绑定到 other 产品的 Key → 按未授权拒绝
+    const cross = await request(server).post('/api/v1/domain/activate')
+      .set({ 'X-Api-Key': boundKey })
+      .send({ domain: 'cross-product.example.com' });
+    assert.equal(cross.status, 404, JSON.stringify(cross.body));
+
+    const verify = await request(server).post('/api/v1/domain/verify')
+      .set({ 'X-Api-Key': boundKey })
+      .send({ domain: 'cross-product.example.com' });
+    assert.equal(verify.body.valid, false);
+    assert.equal(verify.body.reason, 'invalid_not_found');
   });
 });

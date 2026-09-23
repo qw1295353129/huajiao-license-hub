@@ -1,9 +1,11 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Audience, ClientIp, CurrentUser, Public, UserAgent } from '../../common/decorators';
 import type { RequestUser } from '../../common/auth-context';
 import {
   ForgotPasswordDto, PortalLoginDto, PortalRefreshDto, PortalRegisterDto, ResetPasswordDto,
+  ResendVerifyDto, VerifyEmailDto,
 } from './dto';
 import { PortalAuthService } from './portal-auth.service';
 
@@ -15,6 +17,7 @@ export class PortalAuthController {
 
   @Public()
   @Post('register')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: '客户注册' })
   register(@Body() dto: PortalRegisterDto, @ClientIp() ip: string, @UserAgent() ua: string) {
     return this.auth.register(dto, { ip, userAgent: ua });
@@ -22,6 +25,7 @@ export class PortalAuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: '客户登录' })
   login(@Body() dto: PortalLoginDto, @ClientIp() ip: string, @UserAgent() ua: string) {
     return this.auth.login(dto, { ip, userAgent: ua });
@@ -42,7 +46,24 @@ export class PortalAuthController {
   }
 
   @Public()
+  @Post('verify-email')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: '邮箱验证（验证成功后认领历史授权）' })
+  verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.auth.verifyEmail(dto.token);
+  }
+
+  @Public()
+  @Post('resend-verify')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: '重发验证邮件（已有未验证账号的恢复路径）' })
+  resendVerify(@Body() dto: ResendVerifyDto) {
+    return this.auth.resendVerify(dto.email);
+  }
+
+  @Public()
   @Post('forgot-password')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: '找回密码（发送重置链接）' })
   forgot(@Body() dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto.email);

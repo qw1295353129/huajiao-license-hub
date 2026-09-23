@@ -33,6 +33,10 @@ export const EMAIL_TEMPLATES = {
     subject: '重置你的 {{siteName}} 密码',
     body: '你好 {{name}}：\n\n请在 {{expiresIn}} 内点击下面的链接重置密码：\n{{resetUrl}}\n\n如果不是你本人操作，请忽略本邮件。',
   },
+  email_verify: {
+    subject: '验证你的 {{siteName}} 邮箱',
+    body: '你好 {{name}}：\n\n请在 {{expiresIn}} 内点击下面的链接验证邮箱：\n{{verifyUrl}}\n\n验证通过后才能认领与该邮箱关联的订单与授权。如果不是你本人操作，请忽略本邮件。',
+  },
   device_unbound: {
     subject: '设备已解绑',
     body: '你好 {{name}}：\n\n授权 {{licenseKey}} 下的设备「{{deviceName}}」已解绑，当前可用设备 {{activeDevices}}/{{maxDevices}}。',

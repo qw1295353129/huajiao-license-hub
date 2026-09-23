@@ -39,13 +39,13 @@ export class RedeemController {
   @Get('batches/:id/export')
   @Roles('admin')
   @Audit({ action: 'redeem.export', targetType: 'redeem_batch', recordBody: false })
-  @ApiOperation({ summary: '导出批次卡密 CSV（默认含明文）' })
+  @ApiOperation({ summary: '导出批次卡密 CSV（默认掩码，reveal=true 才导出明文）' })
   async exportBatch(
     @Param() params: IdParamDto,
     @Query('reveal') reveal: string | undefined,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<string> {
-    const csv = await this.redeem.exportCodes(params.id, reveal !== 'false');
+    const csv = await this.redeem.exportCodes(params.id, reveal === 'true');
     void reply.header('Content-Type', 'text/csv; charset=utf-8');
     void reply.header('Content-Disposition', 'attachment; filename="redeem-codes.csv"');
     return csv;

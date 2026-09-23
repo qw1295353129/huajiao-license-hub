@@ -28,6 +28,14 @@ export class ResetPasswordDto {
   password!: string;
 }
 
+export class VerifyEmailDto {
+  @IsString() @MinLength(20) @MaxLength(200) token!: string;
+}
+
+export class ResendVerifyDto {
+  @IsEmail() email!: string;
+}
+
 export class UpdateProfileDto {
   @IsOptional() @IsString() @MaxLength(60) name?: string;
 }
