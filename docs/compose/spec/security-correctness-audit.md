@@ -1,16 +1,26 @@
 ---
 feature: security-correctness-audit
-status: in-progress
+status: delivered
 updated: 2026-09-24
 branch: fix/security-correctness
-commits:
+commits: 52d7e6d..5007426
 ---
 
 # 全仓安全与正确性审查与修复
 
 ## Report
 
-（交付时填写）
+**What was built** — 对 LicenseHub 全仓（后端鉴权/业务、门户、域名授权、SDK、前端、部署配置）完成安全与正确性审查，产出 C1–C7 / N1–N27 / suggestion 分级清单。全部 critical 与 normal 已在分支 `fix/security-correctness` 修复：生产默认口令与 DATA_KEY 强制、门户邮箱验证与认领门槛（含验证落地页与 resend）、域名 API Key 产品绑定与 deactivate 令牌、SDK 验签 fail-closed 与 kid 映射、订单发码幂等/自愈与优惠券原子占用、导出 reveal 布尔、离线签名前写入 grace days；并覆盖会话保留/角色失效、Throttler 与门户锁定、盲索引大小写敏感、配额 TOCTOU、支付金额与恒定时间 HMAC、Webhook SSRF、nginx CSP/XFF、dockerignore、按角色隐藏导航等。建议级问题按约定只记录不改。
+
+**Verification** — `pnpm typecheck` PASS；`pnpm --filter @license-hub/shared build` + `test` PASS 10/10；`pnpm --filter @license-hub/api test:all` PASS 114/114（基线 84，含新增回归）；`pnpm --filter @license-hub/web typecheck`/`build` PASS；`node scripts/acceptance.mjs` PASS 52/52；`check-docker-config.mjs` / `check-runtime-bundle.mjs` PASS。独立复审 request-changes 后 9 项 critical 修复逐项 re-review APPROVE，无新 critical。
+
+**Journey log**
+
+1. 四路并行审计（鉴权/业务/密码学/前端部署）汇总去重后落盘 Findings，避免单线漏项。
+2. 首轮验收 46/51：域名 deactivate 新令牌要求与生产拦 127.0.0.1 导致失败——改验收脚本带 accessToken，Webhook 回环改为始终放行（私网/元数据仍拦）。
+3. 首轮独立复审 request-changes：SDK 未带 accessToken、无 verify-email 路由、markPaid 自愈缺口、N4/N6/N18/N25 半修复——补 `deactivateDomain(domain, accessToken)`、验证页+resend、alreadyPaid 自愈、auth-token 大小写敏感、门户锁定、pending 唯一索引、ClientIp 最右跳。
+4. `@Type(() => Boolean)` 在 `enableImplicitConversion` 下无法靠 `@Transform` 修 query 布尔，必须读 raw `obj.reveal`。
+5. 新基线：API 测试 114、验收 52；SDK 无自动化测试是契约回归温床（本轮靠复审与 e2e API 路径兜住）。
 
 ## [S1] Problem
 
