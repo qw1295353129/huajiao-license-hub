@@ -114,6 +114,7 @@ node scripts/check-docker-config.mjs             # Dockerfile / compose 静态�
 node scripts/check-runtime-bundle.mjs            # 复现镜像文件布局，验证迁移与启动可用
 node scripts/ui-smoke.cjs                        # 浏览器冒烟（管理端 10 页）
 node scripts/portal-smoke.cjs                    # 浏览器冒烟（用户门户）
+node scripts/license-create-smoke.cjs            # 浏览器冒烟（登录 + 创建授权）
 node sdk/demo.mjs <API_KEY> <LICENSE_KEY>        # 客户端接入演示
 ~~~
 
