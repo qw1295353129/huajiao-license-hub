@@ -52,23 +52,7 @@ function usage(): void {
   ].join('\n'));
 }
 
-/** 打印错误链：drizzle 的 DrizzleQueryError 把真正原因放在 cause 里，只打印 message 看不出根因。 */
-function describeError(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
-  const lines: string[] = [error.message];
-  const seen = new Set<unknown>([error]);
-  let cause: unknown = (error as { cause?: unknown }).cause;
-  while (cause instanceof Error && !seen.has(cause)) {
-    seen.add(cause);
-    lines.push('↳ ' + cause.message);
-    cause = (cause as { cause?: unknown }).cause;
-  }
-  const text = lines.join('\n');
-  if (/does not exist|不存在/.test(text)) {
-    lines.push('提示：数据库表可能还没建。执行：docker compose run --rm --no-deps api node dist/db/migrate-cli.js');
-  }
-  return lines.join('\n');
-}
+import { describeError } from './error-format';
 
 /** 打码后的连接串：只保留结构，口令不落日志。 */
 function maskedUrl(url: string | null): string {

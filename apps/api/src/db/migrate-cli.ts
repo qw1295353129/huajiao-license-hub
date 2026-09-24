@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import { loadEnvFiles } from '../config/load-env';
 import { loadConfig } from '../config/configuration';
+import { describeError } from './error-format';
 import { runMigrations } from './migrate';
 
 async function main(): Promise<void> {
@@ -10,6 +11,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error('[migrate] 失败：', error instanceof Error ? error.message : error);
+  console.error('[migrate] 失败：', describeError(error));
   process.exitCode = 1;
 });
