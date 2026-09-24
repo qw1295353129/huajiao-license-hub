@@ -12,7 +12,8 @@
     "test:all": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 \"dist-test/src/**/*.spec.js\" \"dist-test/test/**/*.e2e-spec.js\"",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate-cli.ts",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "admin:cli": "tsx src/db/admin-cli.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13.1.1",

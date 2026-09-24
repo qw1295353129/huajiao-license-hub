@@ -57,6 +57,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     if (requestId) body.requestId = requestId;
+    // 限流：不要把框架内部文案（ThrottlerException: Too Many Requests）丢给终端用户
+    if (status === HttpStatus.TOO_MANY_REQUESTS) {
+      body = { ...body, code: ErrorCodes.RATE_LIMITED, message: '操作过于频繁，请稍后再试' };
+      void reply.header('Retry-After', '60');
+    }
     if (status >= 500) {
       this.logger.error('[' + requestId + '] ' + request.method + ' ' + request.url + ' -> ' + status + ' ' + body.message);
     }

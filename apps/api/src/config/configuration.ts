@@ -59,6 +59,63 @@ function required(name: string, value: string | undefined, isProd: boolean, devF
   throw new Error('缺少环境变量：' + name);
 }
 
+/**
+ * 校验并「自愈」连接串类环境变量。
+ *
+ * 实战事故：`openssl rand -base64 24` 生成的密码含 `/`（或 @ : ? #），直接拼进
+ * `postgres://user:口令@host:5432/db` 后 URL 解析失败，容器启动即崩，日志里只有一句
+ * `TypeError: Invalid URL (ERR_INVALID_URL)` —— 排查成本极高。
+ *
+ * 策略：先按原样解析；失败时尝试只对「口令部分」做百分号编码（语义等价，PostgreSQL 收
+ * 到的还是原口令）；仍失败才抛错，并给出可执行的修法。自愈时打印警告，提示换成 URL 安全口令。
+ */
+function resolveParsableUrl(name: string, url: string): string {
+  const ok = (candidate: string): boolean => {
+    try {
+      return Boolean(new URL(candidate).hostname);
+    } catch {
+      return false;
+    }
+  };
+
+  if (ok(url)) return url;
+
+  const repaired = encodeUserInfoPassword(url);
+  if (repaired && ok(repaired)) {
+    console.warn(
+      '[config] ' + name + ' 里的口令含未编码的特殊字符（常见于 openssl rand -base64 的输出），' +
+      '已按百分号编码后继续使用。建议改用 URL 安全口令：openssl rand -hex 24，' +
+      '并在数据库里同步修改该账号口令。',
+    );
+    return repaired;
+  }
+
+  throw new Error(
+    name + ' 无法解析为 URL。请检查连接串格式，以及口令里是否含 / @ : ? # 等需要百分号编码的字符' +
+    '（/ → %2F、+ → %2B、= → %3D、@ → %40）。也可用 openssl rand -hex 24 生成 URL 安全口令。',
+  );
+}
+
+/** 仅重写 `scheme://user:password@host` 中的 password 段，其余原样保留。 */
+function encodeUserInfoPassword(url: string): string | null {
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(url);
+  if (!scheme) return null;
+  const rest = url.slice(scheme[0].length);
+  const at = rest.lastIndexOf('@');
+  if (at <= 0) return null;
+  const userinfo = rest.slice(0, at);
+  const tail = rest.slice(at + 1);
+  const colon = userinfo.indexOf(':');
+  if (colon === -1) return null;
+  const user = userinfo.slice(0, colon);
+  const password = userinfo.slice(colon + 1);
+  if (!password) return null;
+  // RFC 3986 userinfo 允许 unreserved + sub-delims；'@' 与 '/' 必须编码
+  const encoded = password.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=]/g, (char) =>
+    '%' + char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+  return scheme[0] + user + ':' + encoded + '@' + tail;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const nodeEnv = env.NODE_ENV ?? 'development';
   const isProd = nodeEnv === 'production';
@@ -85,6 +142,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const jwtSecret = required('JWT_SECRET', env.JWT_SECRET, isProd, 'dev-only-jwt-secret-' + randomBytes(8).toString('hex'));
   if (isProd && jwtSecret.length < 32) throw new Error('JWT_SECRET 至少需要 32 个字符');
 
+  // 连接串必须在启动时就能解析：否则容器会以 ERR_INVALID_URL 崩溃重启，日志难懂
+  const rawDatabaseUrl = env.DATABASE_URL ?? 'postgres://licensehub:licensehub@localhost:5432/licensehub';
+  const databaseUrl = driver === 'postgres' ? resolveParsableUrl('DATABASE_URL', rawDatabaseUrl) : rawDatabaseUrl;
+  const rawRedisUrl = env.REDIS_URL && env.REDIS_URL.trim() !== '' ? env.REDIS_URL.trim() : null;
+  const redisUrl = rawRedisUrl ? resolveParsableUrl('REDIS_URL', rawRedisUrl) : null;
+
   return {
     env: nodeEnv,
     isProd,
@@ -96,12 +159,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
     database: {
       driver,
-      url: env.DATABASE_URL ?? 'postgres://licensehub:licensehub@localhost:5432/licensehub',
+      url: databaseUrl,
       pgliteDir: env.PGLITE_DIR ?? './.data/pglite',
       autoMigrate: (env.AUTO_MIGRATE ?? 'true') === 'true',
     },
     redis: {
-      url: env.REDIS_URL && env.REDIS_URL.trim() !== '' ? env.REDIS_URL.trim() : null,
+      url: redisUrl,
       queueEnabled: (env.QUEUE_ENABLED ?? 'false') === 'true',
     },
 
