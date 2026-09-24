@@ -18,7 +18,7 @@ export async function createTestApp(): Promise<TestContext> {
     new FastifyAdapter({ genReqId: () => randomUUID() }),
     { logger: false, rawBody: true },
   );
-  configureApp(app, loadConfig());
+  await configureApp(app, loadConfig());
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   return { app, server: app.getHttpServer() };

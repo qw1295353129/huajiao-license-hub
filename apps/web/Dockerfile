@@ -19,9 +19,10 @@ COPY apps/web apps/web
 RUN pnpm --filter @license-hub/shared build \
  && pnpm --filter @license-hub/web build
 
-FROM nginx:1.27-alpine AS runner
+# 非 root 运行 nginx（suggestion）：官方 unprivileged 镜像，监听 8080
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runner
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1
+  CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1

@@ -21,14 +21,26 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    # 内网也启用 requirepass：防同网络其它容器未授权访问（suggestion）
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+      - --requirepass
+      - ${REDIS_PASSWORD:?必须设置 REDIS_PASSWORD}
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?必须设置 REDIS_PASSWORD}
     networks: [internal]
 
   # 一次性迁移作业：api 启动前完成建表（api 自身也开了 AUTO_MIGRATE 兜底）
@@ -46,7 +58,7 @@ services:
         TIMEZONE: ${TIMEZONE:-Asia/Shanghai}
         DATABASE_DRIVER: postgres
         DATABASE_URL: postgres://${POSTGRES_USER:-licensehub}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-licensehub}
-        REDIS_URL: redis://redis:6379
+        REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
         QUEUE_ENABLED: "true"
         AUTO_MIGRATE: "false"
         JWT_SECRET: ${JWT_SECRET:?必须设置 JWT_SECRET}
@@ -92,7 +104,7 @@ services:
     image: licensehub-web:local
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_PORT:-8080}:8080"
     depends_on:
       api:
         condition: service_healthy

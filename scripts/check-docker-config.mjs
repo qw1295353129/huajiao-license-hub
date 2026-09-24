@@ -38,7 +38,7 @@ const checks = [
   ['migrate 服务使用 migrate-cli', compose.includes('dist/db/migrate-cli.js')],
   ['api 服务继承同一环境变量锚点', compose.includes('<<: *api-env')],
   ['api 依赖 migrate 成功完成', compose.includes('service_completed_successfully')],
-  ['web 暴露宿主端口变量', compose.includes('${WEB_PORT:-8080}:80')],
+  ['web 暴露宿主端口变量', compose.includes('${WEB_PORT:-8080}:8080')],
   ['数据库使用命名卷', compose.includes('pgdata:/var/lib/postgresql/data')],
 ];
 for (const [name, ok] of checks) {

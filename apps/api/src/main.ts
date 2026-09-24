@@ -25,7 +25,7 @@ async function bootstrap(): Promise<void> {
     rawBody: true,
   });
 
-  configureApp(app, config);
+  await configureApp(app, config);
   app.enableShutdownHooks();
 
   if (config.swaggerEnabled) {

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
-import { formatLicenseKey, maskLicenseKey, normalizeLicenseKey } from '@license-hub/shared';
+import { extractLicenseKeyCandidate, formatLicenseKey, maskLicenseKey, normalizeLicenseKey } from '@license-hub/shared';
 import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { CryptoService } from '../../crypto/crypto.service';
 import { DB } from '../../db/db.module';
@@ -178,7 +178,7 @@ export class RedeemService {
    * 并发安全：用条件更新（status='unused'）抢占卡密，抢不到即视为已被使用。
    */
   async redeem(rawCode: string, customer: { id?: string; email: string } | null) {
-    const normalized = normalizeLicenseKey(rawCode);
+    const normalized = normalizeLicenseKey(extractLicenseKeyCandidate(rawCode) ?? rawCode);
     const lookup = this.crypto.blindIndex(normalized, 'redeem');
     const [code] = await this.db.select().from(redeemCodes).where(eq(redeemCodes.codeLookup, lookup)).limit(1);
     if (!code) throw new AppError(ErrorCodes.REDEEM_CODE_INVALID, '卡密不存在，请检查是否输入正确', 404);

@@ -7,6 +7,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type SQL } from 'drizzle-orm';
 import type { DashboardSummary, TimeseriesPoint } from '@license-hub/shared';
+import { CONFIG_TOKEN, type AppConfig } from '../../config/configuration';
 import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 
@@ -28,7 +29,10 @@ function toNumber(value: unknown): number {
 
 @Injectable()
 export class AnalyticsService {
-  constructor(@Inject(DB) private readonly handle: DatabaseHandle) {}
+  constructor(
+    @Inject(DB) private readonly handle: DatabaseHandle,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
+  ) {}
 
   async summary(): Promise<DashboardSummary> {
     const [licenseStats] = await runQuery<Record<string, unknown>>(this.handle, sql`
@@ -55,7 +59,8 @@ export class AnalyticsService {
     const [activationStats] = await runQuery<Record<string, unknown>>(this.handle, sql`
       select count(*)::int as today
       from license_events
-      where type = 'activated' and created_at >= date_trunc('day', now())
+      where type = 'activated'
+        and (created_at at time zone ${this.config.timezone})::date = (now() at time zone ${this.config.timezone})::date
     `);
 
     const [revenueStats] = await runQuery<Record<string, unknown>>(this.handle, sql`
@@ -97,23 +102,26 @@ export class AnalyticsService {
 
   async timeseries(days = 30): Promise<TimeseriesPoint[]> {
     const safeDays = Math.min(365, Math.max(1, Math.floor(days)));
+    // 与到期提醒一致：按站点时区取日，避免与 TIMEZONE 不一致时错一天（suggestion）
+    const tz = this.config.timezone;
     const data = await runQuery<Record<string, unknown>>(this.handle, sql`
       with series as (
         select generate_series(
           -- 含今天在内共 safeDays 个点
-          (current_date - make_interval(days => ${safeDays - 1}))::date,
-          current_date,
+          ((now() at time zone ${tz})::date - make_interval(days => ${safeDays - 1}))::date,
+          (now() at time zone ${tz})::date,
           interval '1 day'
         )::date as day
       )
       select
         to_char(s.day, 'MM-DD') as date,
         coalesce((select count(*)::int from license_events e
-                   where e.type = 'activated' and e.created_at::date = s.day), 0) as activations,
+                   where e.type = 'activated'
+                     and (e.created_at at time zone ${tz})::date = s.day), 0) as activations,
         coalesce((select count(*)::int from verification_logs v
-                   where v.at::date = s.day), 0) as verifications,
+                   where (v.at at time zone ${tz})::date = s.day), 0) as verifications,
         coalesce((select count(*)::int from licenses l
-                   where l.created_at::date = s.day), 0) as new_licenses
+                   where (l.created_at at time zone ${tz})::date = s.day), 0) as new_licenses
       from series s
       order by s.day asc
     `);
