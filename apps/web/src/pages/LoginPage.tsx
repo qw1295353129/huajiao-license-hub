@@ -44,14 +44,13 @@ export function LoginPage() {
   };
 
   return (
-    <div className="grid min-h-dvh place-items-center bg-gradient-to-br from-brand-50 via-white to-emerald-50 p-4 dark:from-neutral-950 dark:via-neutral-950 dark:to-brand-950">
+    <div className="lh-auth-fields grid min-h-dvh place-items-center bg-gradient-to-br from-brand-50 via-white to-emerald-50 p-4 dark:from-neutral-950 dark:via-neutral-950 dark:to-brand-950">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
           <div className="grid size-11 place-items-center rounded-xl bg-brand-500 text-white shadow-lg">
             <ShieldCheck size={22} />
           </div>
           <h1 className="text-lg font-semibold">LicenseHub 控制台</h1>
-          <p className="text-xs opacity-55">软件授权管理 · 个人运营</p>
         </div>
 
         <Card>
@@ -67,7 +66,7 @@ export function LoginPage() {
                 isInvalid={Boolean(error) && !needsTotp}
               >
                 <Label>邮箱</Label>
-                <Input placeholder="admin@example.com" autoComplete="username" autoFocus />
+                <Input autoComplete="username" autoFocus />
               </TextField>
 
               <TextField
@@ -80,7 +79,7 @@ export function LoginPage() {
                 isInvalid={Boolean(error) && !needsTotp}
               >
                 <Label>密码</Label>
-                <Input placeholder="••••••••" autoComplete="current-password" />
+                <Input autoComplete="current-password" />
                 <FieldError>{error ?? ''}</FieldError>
               </TextField>
 
@@ -112,10 +111,6 @@ export function LoginPage() {
             </form>
           </Card.Content>
         </Card>
-
-        <p className="mt-4 text-center text-[11px] opacity-40">
-          首次部署使用 .env 中的 BOOTSTRAP_ADMIN_EMAIL / PASSWORD 登录，登录后请立即改密并开启双因素
-        </p>
       </div>
     </div>
   );

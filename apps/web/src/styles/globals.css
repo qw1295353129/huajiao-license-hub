@@ -46,6 +46,19 @@ body {
   letter-spacing: 0.08em;
 }
 
+/*
+ * 登录页输入框的可见边界。
+ * HeroUI v3 默认主题里 --border-width-field = 0、--field-border = transparent，
+ * 输入框的「边界」完全靠 placeholder 提示；登录页按需求去掉了 placeholder，
+ * 这里给登录卡片范围内的输入框补一条细边框（只在登录页生效，不改动其它页面）。
+ */
+.lh-auth-fields {
+  --border-width-field: 1px;
+  --field-border: color-mix(in oklab, currentColor 16%, transparent);
+  --field-border-hover: color-mix(in oklab, currentColor 28%, transparent);
+  --field-border-focus: var(--color-brand-500);
+}
+
 @keyframes lh-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .animate-fade-in { animation: lh-fade-in .24s ease-out; }
 
