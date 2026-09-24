@@ -49,14 +49,13 @@ export function PortalLoginPage() {
   };
 
   return (
-    <div className="grid min-h-dvh place-items-center p-4">
+    <div className="lh-auth-fields grid min-h-dvh place-items-center p-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
           <div className="grid size-11 place-items-center rounded-xl bg-brand-500 text-white shadow-lg">
             <ShieldCheck size={22} />
           </div>
           <h1 className="text-lg font-semibold">用户中心</h1>
-          <p className="text-xs opacity-55">查看你的授权、绑定设备与订单</p>
         </div>
 
         <Card>
@@ -80,7 +79,7 @@ export function PortalLoginPage() {
             <form onSubmit={submit} className="flex flex-col gap-4">
               <TextField name="email" type="email" value={email} onChange={setEmail} isRequired fullWidth>
                 <Label>邮箱</Label>
-                <Input placeholder="you@example.com" autoComplete="username" autoFocus />
+                <Input autoComplete="username" autoFocus />
               </TextField>
 
               {mode === 'register' ? (
@@ -93,7 +92,7 @@ export function PortalLoginPage() {
               {mode !== 'forgot' ? (
                 <TextField name="password" type="password" value={password} onChange={setPassword} isRequired fullWidth isInvalid={Boolean(error)}>
                   <Label>密码</Label>
-                  <Input placeholder="至少 8 位，含字母与数字" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+                  <Input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
                   <FieldError>{error ?? ''}</FieldError>
                 </TextField>
               ) : null}
