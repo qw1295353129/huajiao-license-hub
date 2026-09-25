@@ -150,6 +150,39 @@ if [ "$pg_password_changed" -eq 1 ]; then
   sync_pg_password
 fi
 
+# ---------- 3.5 真实连接校验：.env 没改但库里口令不一致时，这里兜住 ----------
+# 场景：数据卷是用「上一次的口令」初始化的，后来手动改过 .env（或反过来），
+# 表现为 api/migrate 报 password authentication failed —— 只校验 .env 看不出来。
+verify_tcp_login() {
+  local user=$1 db=$2 pw=$3
+  docker compose exec -T -e PGPASSWORD="$pw" postgres \
+    psql -h 127.0.0.1 -U "$user" -d "$db" -c 'select 1' >/dev/null 2>&1
+}
+
+ensure_db_auth() {
+  local user db pw
+  command -v docker >/dev/null 2>&1 || return 0
+  docker compose ps --status running 2>/dev/null | grep -q postgres || return 0
+  user=$(get_val POSTGRES_USER); user=${user:-licensehub}
+  db=$(get_val POSTGRES_DB);     db=${db:-licensehub}
+  pw=$(get_val POSTGRES_PASSWORD)
+  if verify_tcp_login "$user" "$db" "$pw"; then
+    summary+=("  正常   数据库连接（TCP + .env 中的口令一致）")
+    return 0
+  fi
+  say ""
+  say "⚠ 用 .env 里的口令连不上数据库（password authentication failed）—— 按 .env 同步库里的口令…"
+  # 容器内本地 socket 默认 trust，不需要旧口令即可改
+  if docker compose exec -T postgres psql -U "$user" -d postgres \
+        -c "ALTER USER \"$user\" WITH PASSWORD '$pw';" >/dev/null 2>&1 && verify_tcp_login "$user" "$db" "$pw"; then
+    summary+=("  同步   数据库口令（已改为 .env 中的 POSTGRES_PASSWORD）")
+  else
+    summary+=("  ✖      数据库口令同步失败：确认 POSTGRES_USER/POSTGRES_DB 与数据卷里的一致，或手动执行 ALTER USER")
+  fi
+}
+
+ensure_db_auth
+
 # ---------- 4. 输出 ----------
 say ""
 say "== .env 校验结果 =="
