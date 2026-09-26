@@ -3,8 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button, Card, Chip, Input, Label, Separator, Switch, TextField, toast,
 } from '@heroui/react';
-import { Copy, KeyRound, RefreshCw } from 'lucide-react';
+import { Copy, KeyRound, RefreshCw, ShieldCheck, ShieldOff, KeyRoundIcon } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { ErrorNotice, Loading, PageHeader, Tag } from '@/components/common/ui';
 import { formatDateTime } from '@/lib/format';
 
@@ -204,7 +205,203 @@ export function SettingsPage() {
             ) : null}
           </Card.Content>
         </Card>
+
+        {/* 账户安全：双因素 + 修改密码 */}
+        <Card>
+          <Card.Header>
+            <Card.Title>账户安全</Card.Title>
+            <Card.Description>登录双因素验证与密码管理</Card.Description>
+          </Card.Header>
+          <Card.Content>
+            <TwoFactorSection />
+            <Separator className="my-4" />
+            <PasswordSection />
+          </Card.Content>
+        </Card>
       </div>
+    </div>
+  );
+}
+
+/* ---------- 双因素 TOTP ---------- */
+function TwoFactorSection() {
+  const { user, refreshUser } = useAuth();
+  const [step, setStep] = useState<'idle' | 'setup' | 'enable' | 'disable'>('idle');
+  const [secret, setSecret] = useState('');
+  const [otpauthUri, setOtpauthUri] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const enabled = user?.totpEnabled ?? false;
+
+  const setup = async () => {
+    setBusy(true);
+    try {
+      const res = await api.post<{ secret: string; otpauthUri: string }>('/api/admin/auth/2fa/setup', {});
+      setSecret(res.secret);
+      setOtpauthUri(res.otpauthUri);
+      setStep('enable');
+      setCode('');
+    } catch (error) {
+      toast.danger('生成密钥失败', { description: error instanceof Error ? error.message : '' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const enable = async () => {
+    if (code.length !== 6) { toast.danger('请输入 6 位动态码'); return; }
+    setBusy(true);
+    try {
+      await api.post('/api/admin/auth/2fa/enable', { code });
+      toast.success('双因素已开启');
+      setStep('idle');
+      setCode('');
+      await refreshUser();
+    } catch (error) {
+      toast.danger('启用失败', { description: error instanceof Error ? error.message : '' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    if (!password) { toast.danger('请输入当前密码'); return; }
+    if (code.length !== 6) { toast.danger('请输入 6 位动态码'); return; }
+    setBusy(true);
+    try {
+      await api.post('/api/admin/auth/2fa/disable', { password, code });
+      toast.success('双因素已关闭');
+      setStep('idle');
+      setPassword('');
+      setCode('');
+      await refreshUser();
+    } catch (error) {
+      toast.danger('关闭失败', { description: error instanceof Error ? error.message : '' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm">双因素验证（TOTP）</p>
+          <p className="text-[11px] opacity-55">登录时需输入认证器动态码，防盗号</p>
+        </div>
+        <Chip size="sm" variant="soft" color={enabled ? 'success' : 'default'}>
+          <Chip.Label>{enabled ? '已开启' : '未开启'}</Chip.Label>
+        </Chip>
+      </div>
+
+      {/* 未开启 → 开启流程 */}
+      {!enabled && step === 'idle' && (
+        <Button size="sm" variant="primary" onPress={() => void setup()} isDisabled={busy}>
+          <ShieldCheck size={14} /> 开启双因素
+        </Button>
+      )}
+
+      {step === 'setup' && <p className="text-xs opacity-60">生成密钥中…</p>}
+
+      {step === 'enable' && (
+        <div className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/10">
+          <p className="text-xs opacity-70">用 Google Authenticator / 1Password 等扫描或手动输入密钥：</p>
+          <div className="flex items-center gap-2">
+            <code className="mono-code flex-1 rounded bg-black/5 px-2 py-1 text-[11px] break-all dark:bg-white/5">{secret}</code>
+            <Button size="sm" variant="ghost" onPress={() => { void navigator.clipboard.writeText(secret); toast.success('密钥已复制'); }}>
+              <Copy size={13} />
+            </Button>
+          </div>
+          {otpauthUri ? (
+            <p className="text-[11px] opacity-50 break-all">otpauth URI：{otpauthUri}</p>
+          ) : null}
+          <TextField name="totpCode" value={code} onChange={setCode} fullWidth>
+            <Label>输入认证器显示的 6 位动态码</Label>
+            <Input inputMode="numeric" maxLength={6} placeholder="123456" />
+          </TextField>
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" onPress={() => void enable()} isDisabled={busy}>
+              确认开启
+            </Button>
+            <Button size="sm" variant="ghost" onPress={() => { setStep('idle'); setCode(''); }}>取消</Button>
+          </div>
+        </div>
+      )}
+
+      {/* 已开启 → 关闭流程 */}
+      {enabled && step === 'idle' && (
+        <Button size="sm" variant="danger-soft" onPress={() => { setStep('disable'); setPassword(''); setCode(''); }}>
+          <ShieldOff size={14} /> 关闭双因素
+        </Button>
+      )}
+
+      {enabled && step === 'disable' && (
+        <div className="flex flex-col gap-2 rounded-lg border border-rose-500/30 p-3">
+          <p className="text-xs text-rose-500">关闭后登录只需密码，请确认</p>
+          <TextField name="disablePw" type="password" value={password} onChange={setPassword} fullWidth>
+            <Label>当前密码</Label>
+            <Input autoComplete="current-password" />
+          </TextField>
+          <TextField name="disableCode" value={code} onChange={setCode} fullWidth>
+            <Label>认证器 6 位动态码</Label>
+            <Input inputMode="numeric" maxLength={6} placeholder="123456" />
+          </TextField>
+          <div className="flex gap-2">
+            <Button size="sm" variant="danger" onPress={() => void disable()} isDisabled={busy}>
+              确认关闭
+            </Button>
+            <Button size="sm" variant="ghost" onPress={() => setStep('idle')}>取消</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- 修改密码 ---------- */
+function PasswordSection() {
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const change = async () => {
+    if (!oldPassword || !newPassword) { toast.danger('请填写完整'); return; }
+    if (newPassword !== confirmPassword) { toast.danger('两次输入的新密码不一致'); return; }
+    if (newPassword.length < 8) { toast.danger('新密码至少 8 位'); return; }
+    setBusy(true);
+    try {
+      await api.post('/api/admin/auth/password', { currentPassword: oldPassword, newPassword });
+      toast.success('密码已修改，其它会话已下线');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      toast.danger('修改失败', { description: error instanceof Error ? error.message : '' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm">修改密码</p>
+      <TextField name="oldPw" type="password" value={oldPassword} onChange={setOldPassword} fullWidth>
+        <Label>当前密码</Label>
+        <Input autoComplete="current-password" />
+      </TextField>
+      <TextField name="newPw" type="password" value={newPassword} onChange={setNewPassword} fullWidth>
+        <Label>新密码（至少 8 位）</Label>
+        <Input autoComplete="new-password" />
+      </TextField>
+      <TextField name="confirmPw" type="password" value={confirmPassword} onChange={setConfirmPassword} fullWidth>
+        <Label>确认新密码</Label>
+        <Input autoComplete="new-password" />
+      </TextField>
+      <Button size="sm" variant="primary" onPress={() => void change()} isDisabled={busy}>
+        <KeyRoundIcon size={14} /> 修改密码
+      </Button>
     </div>
   );
 }
