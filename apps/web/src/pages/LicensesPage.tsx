@@ -281,7 +281,12 @@ export function LicensesPage() {
 
         <div className="pb-2">
           <Switch isSelected={onlyExpiring} onChange={(value) => { setOnlyExpiring(value); setPage(1); }}>
-            <Switch.Content>仅看 7 天内到期</Switch.Content>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              仅看 7 天内到期
+            </Switch.Content>
           </Switch>
         </div>
       </div>

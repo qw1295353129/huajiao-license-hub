@@ -101,7 +101,12 @@ export function SettingsPage() {
                   <p className="text-[11px] opacity-55">关闭后只能由管理员创建客户账号</p>
                 </div>
                 <Switch isSelected={form.allowRegistration} onChange={(value) => setForm({ ...form, allowRegistration: value })}>
-                  <Switch.Content>{form.allowRegistration ? '允许' : '关闭'}</Switch.Content>
+                  <Switch.Content>
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                    {form.allowRegistration ? '允许' : '关闭'}
+                  </Switch.Content>
                 </Switch>
               </div>
 

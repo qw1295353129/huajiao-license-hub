@@ -47,15 +47,15 @@ body {
 }
 
 /*
- * 登录页输入框的可见边界。
+ * 输入框可见边界。
  * HeroUI v3 默认主题里 --border-width-field = 0、--field-border = transparent，
- * 输入框的「边界」完全靠 placeholder 提示；登录页按需求去掉了 placeholder，
- * 这里给登录卡片范围内的输入框补一条细边框（只在登录页生效，不改动其它页面）。
+ * 不补的话输入框没有边框、看起来像静态文字（表单页会让人以为"保存是假按钮"）。
+ * 宽度取 2px：1px 会被解析成亚像素（≈0.71px）在暗色下等于隐形。
  */
-.lh-auth-fields {
-  --border-width-field: 1px;
-  --field-border: color-mix(in oklab, currentColor 16%, transparent);
-  --field-border-hover: color-mix(in oklab, currentColor 28%, transparent);
+:root {
+  --border-width-field: 2px;
+  --field-border: color-mix(in oklab, currentColor 35%, transparent);
+  --field-border-hover: color-mix(in oklab, currentColor 50%, transparent);
   --field-border-focus: var(--color-brand-500);
 }
 
