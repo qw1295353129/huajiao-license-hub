@@ -4,10 +4,12 @@ import { Button, Card, Input, Label, FieldError, TextField, toast } from '@herou
 import { ShieldCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useSiteName } from '@/lib/useSiteInfo';
 
 export function LoginPage() {
   const { login, user } = useAuth();
   const navigate = useNavigate();
+  const siteName = useSiteName();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totp, setTotp] = useState('');
@@ -50,7 +52,7 @@ export function LoginPage() {
           <div className="grid size-11 place-items-center rounded-xl bg-brand-500 text-white shadow-lg">
             <ShieldCheck size={22} />
           </div>
-          <h1 className="text-lg font-semibold">LicenseHub 控制台</h1>
+          <h1 className="text-lg font-semibold">{siteName} 控制台</h1>
         </div>
 
         <Card>

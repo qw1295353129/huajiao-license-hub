@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { ROLE_RANK, type AdminRole } from '@license-hub/shared';
 import { useAuth } from '@/lib/auth';
+import { useSiteName } from '@/lib/useSiteInfo';
 
 interface NavItem {
   to: string;
@@ -48,6 +49,7 @@ export function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const siteName = useSiteName();
 
   const handleLogout = async () => {
     await logout();
@@ -61,7 +63,7 @@ export function AdminLayout() {
       <div className="mb-3 flex items-center gap-2 px-2 py-1">
         <div className="grid size-8 place-items-center rounded-lg bg-brand-500 font-bold text-white">L</div>
         <div className="leading-tight">
-          <p className="text-sm font-semibold">LicenseHub</p>
+          <p className="text-sm font-semibold">{siteName}</p>
           <p className="text-[11px] opacity-50">授权管理系统</p>
         </div>
       </div>
@@ -156,7 +158,7 @@ export function AdminLayout() {
         </main>
         <Separator />
         <footer className="px-4 py-2 text-[11px] opacity-40">
-          LicenseHub · 数据完全自持 · 建议开启双因素与每日备份
+          {siteName} · 数据完全自持 · 建议开启双因素与每日备份
         </footer>
       </div>
     </div>

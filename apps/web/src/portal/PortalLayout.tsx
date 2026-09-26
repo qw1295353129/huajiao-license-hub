@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Button, Card, Separator, toast } from '@heroui/react';
 import { Globe, KeyRound, LogOut, Receipt, Ticket, User } from 'lucide-react';
 import { usePortalAuth } from '@/lib/auth';
+import { useSiteName } from '@/lib/useSiteInfo';
 
 const NAV = [
   { to: '/portal/licenses', label: '我的授权', icon: KeyRound },
@@ -14,6 +15,7 @@ const NAV = [
 export function PortalLayout() {
   const { user, logout } = usePortalAuth();
   const navigate = useNavigate();
+  const siteName = useSiteName();
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-brand-50/60 to-white dark:from-neutral-950 dark:to-neutral-950">
@@ -21,7 +23,7 @@ export function PortalLayout() {
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
           <div className="flex items-center gap-2">
             <div className="grid size-7 place-items-center rounded-lg bg-brand-500 text-sm font-bold text-white">L</div>
-            <span className="text-sm font-semibold">LicenseHub 用户中心</span>
+            <span className="text-sm font-semibold">{siteName} 用户中心</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden text-xs opacity-60 sm:inline">{user?.email}</span>
@@ -69,7 +71,7 @@ export function PortalLayout() {
         </Card>
         <Separator />
         <p className="pb-4 text-center text-[11px] opacity-40">
-          LicenseHub · 你的授权与订单数据由软件作者自行保管
+          {siteName} · 你的授权与订单数据由软件作者自行保管
         </p>
       </div>
     </div>
