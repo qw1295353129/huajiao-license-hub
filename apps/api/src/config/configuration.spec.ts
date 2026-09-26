@@ -70,3 +70,28 @@ describe('loadConfig · 连接串校验与自愈', () => {
     assert.equal(config.database.driver, 'pglite');
   });
 });
+
+describe('loadConfig · CORS 多 Origin', () => {
+  it('默认只放行 APP_ORIGIN', () => {
+    const config = loadConfig({ ...base, APP_ORIGIN: 'https://lic.example.com' });
+    assert.deepEqual(config.corsOrigins, ['https://lic.example.com']);
+  });
+
+  it('CORS_ORIGINS 逗号分隔追加，并与 APP_ORIGIN 去重', () => {
+    const config = loadConfig({
+      ...base,
+      APP_ORIGIN: 'https://lic.example.com',
+      CORS_ORIGINS: 'https://lic.example.com, http://127.0.0.1:5178 ,http://localhost:5178,',
+    });
+    assert.deepEqual(config.corsOrigins, [
+      'https://lic.example.com',
+      'http://127.0.0.1:5178',
+      'http://localhost:5178',
+    ]);
+  });
+
+  it('空 CORS_ORIGINS / 空白项不会污染列表', () => {
+    const config = loadConfig({ ...base, APP_ORIGIN: 'https://lic.example.com', CORS_ORIGINS: '  , ,' });
+    assert.deepEqual(config.corsOrigins, ['https://lic.example.com']);
+  });
+});

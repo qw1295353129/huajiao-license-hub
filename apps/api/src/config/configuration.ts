@@ -18,6 +18,8 @@ export interface AppConfig {
   isProd: boolean;
   port: number;
   appOrigin: string;
+  /** 允许跨域的浏览器 Origin 列表（APP_ORIGIN 本身 + CORS_ORIGINS 里逗号分隔的追加项） */
+  corsOrigins: string[];
   timezone: string;
   swaggerEnabled: boolean;
   logLevel: string;
@@ -148,11 +150,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const rawRedisUrl = env.REDIS_URL && env.REDIS_URL.trim() !== '' ? env.REDIS_URL.trim() : null;
   const redisUrl = rawRedisUrl ? resolveParsableUrl('REDIS_URL', rawRedisUrl) : null;
 
+  const appOrigin = env.APP_ORIGIN ?? 'http://localhost:5273';
+  // 多 Origin：APP_ORIGIN（门户自身）+ CORS_ORIGINS（逗号分隔的追加项，供上游网页应用直连联调）
+  const corsOrigins = [...new Set(
+    [appOrigin, ...(env.CORS_ORIGINS ?? '').split(',')]
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0),
+  )];
+
   return {
     env: nodeEnv,
     isProd,
     port: Number(env.APP_PORT ?? 3000),
-    appOrigin: env.APP_ORIGIN ?? 'http://localhost:5273',
+    appOrigin,
+    corsOrigins,
     timezone: env.TIMEZONE ?? 'Asia/Shanghai',
     swaggerEnabled: (env.SWAGGER_ENABLED ?? (isProd ? 'false' : 'true')) === 'true',
     logLevel: env.LOG_LEVEL ?? 'info',

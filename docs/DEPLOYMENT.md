@@ -44,6 +44,7 @@ docker compose logs -f api     # 看到 "LicenseHub API 已启动" 即成功
 | `NODE_ENV` | 是 | production |
 | `APP_PORT` | 否 | 默认 3000 |
 | `APP_ORIGIN` | 是 | 前端访问地址（CORS 与邮件链接用），如 `https://lic.example.com` |
+| `CORS_ORIGINS` | 否 | 额外允许跨域的浏览器 Origin，逗号分隔（会追加到 `APP_ORIGIN`）。**上游网页应用必须写这里**，例如 novelcraft：`http://127.0.0.1:5178,http://localhost:5178`；对外部署再加上它的正式域名。改完重启 API |
 | `DATABASE_URL` | 是 | `postgres://user:pass@postgres:5432/licensehub` |
 | `DATABASE_DRIVER` | 否 | `postgres`（默认）或 `pglite`（无 PG 的单机模式） |
 | `REDIS_URL` | 否 | 留空则使用进程内队列/限流（单实例可用） |
@@ -209,6 +210,7 @@ location ^~ / {
 
 注意：
 - `APP_ORIGIN` 必须写成最终对外地址（如 `https://lic.example.com`），否则 CORS 与邮件链接会错；
+- **浏览器里的客户端激活会跨域**：novelcraft 等网页应用的 Origin 要进 `CORS_ORIGINS`（见上表），否则预检 204 但没有 `access-control-allow-origin`，前端只会看到「连不上授权服务」。验证：`curl -i -X OPTIONS "$APP_ORIGIN/api/v1/activate" -H "Origin: http://127.0.0.1:5178" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type,x-api-key"`；
 - 面板层已做 HTTP→HTTPS 跳转时，容器内 nginx 的 HSTS 可保留（仅 HTTPS 响应生效）；
 - 若面板「禁止访问敏感文件」规则拦掉了 `/.env*` 等，正好是期望行为，无需改。
 
