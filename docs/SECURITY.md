@@ -88,7 +88,7 @@
 
 - [ ] 所有 `CHANGE_ME` 已替换（`JWT_SECRET`、`LICENSE_PEPPER`、`DATA_KEY`、`POSTGRES_PASSWORD`）
 - [ ] 默认管理员口令已修改，并已启用 TOTP
-- [ ] 站点 HTTPS 生效，`APP_ORIGIN` 与 `CORS_ORIGINS` 已收紧
+- [ ] 站点 HTTPS 生效，`APP_ORIGIN` 已设为最终对外地址（CORS 白名单即此值）
 - [ ] `NODE_ENV=production`、`SWAGGER_ENABLED=false`（或加访问控制）
 - [ ] 备份任务已配置并验证可恢复
 - [ ] 邮件发信已配置 SPF/DKIM（降低进垃圾箱概率）

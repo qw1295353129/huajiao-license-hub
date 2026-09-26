@@ -12,24 +12,29 @@
 
 ## 2. 首次部署
 
+**方式 A：一键脚本（推荐）**
+
+~~~bash
+git clone <你的仓库> license-hub && cd license-hub
+bash deploy/scripts/install.sh --origin https://lic.example.com [--email you@x.com] [--password 'xxx']
+# 自动生成 URL 安全密钥、构建镜像、启动、等健康检查、打印登录地址
+~~~
+
+**方式 B：手动**
+
 ~~~bash
 git clone <你的仓库> license-hub && cd license-hub/deploy
-cp .env.example .env
+bash init-env.sh                 # 生成/修复 .env（自动校验 DATA_KEY、口令 URL 安全性）
 
-# 生成强随机密钥（把输出填进 .env）
-openssl rand -base64 48   # JWT_SECRET
-openssl rand -base64 48   # LICENSE_PEPPER
-openssl rand -base64 32   # DATA_KEY（base64，32 字节）
-# ⚠️ 数据库/Redis 口令必须用 -hex：它们会被拼进 postgres:// / redis:// 连接串，
-#    base64 输出里的 “/” 会让连接串解析失败，api 容器直接起不来（ERR_INVALID_URL）
-openssl rand -hex 24      # POSTGRES_PASSWORD
-openssl rand -hex 24      # REDIS_PASSWORD
+# 需要自定义时再改 .env：
+#   APP_ORIGIN=最终对外地址（CORS 与邮件链接）
+#   BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD=首次启动的管理员
 
 docker compose up -d --build
 docker compose logs -f api     # 看到 "LicenseHub API 已启动" 即成功
 ~~~
 
-访问 `http://<服务器IP>:8080`，用 `.env` 中的 `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` 登录，
+访问 `http://<服务器IP>:8080`（或你的域名），用 `.env` 中的 `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` 登录，
 **登录后第一件事：改密码 + 开启 TOTP**。
 
 ## 3. 环境变量

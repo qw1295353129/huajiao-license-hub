@@ -98,6 +98,11 @@
 | GET/POST/PATCH | `/team`（管理员账号，仅 owner） |
 | GET | `/email-logs` |
 
+### 支付回调（供支付提供方调用，按 provider 验签）
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/payments/:provider/callback` | 提供方回调（HMAC 验签 + `payment_events` 幂等去重）→ 自动发码 |
+
 ## 2. 用户门户 `/api/portal`
 
 | 方法 | 路径 | 说明 |

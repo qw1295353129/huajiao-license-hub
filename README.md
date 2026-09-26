@@ -38,37 +38,42 @@ pnpm dev                                    # 同时启动 api(3000) 与 web(527
 ## 生产部署
 
 ~~~bash
+# 方式一：一键脚本（推荐，自动生成强密钥并等待健康检查）
+bash deploy/scripts/install.sh --origin https://lic.example.com
+
+# 方式二：手动
 cd deploy
-cp .env.example .env      # 修改所有 CHANGE_ME 项
+bash init-env.sh            # 生成/修复 .env（URL 安全口令、校验 DATA_KEY 等）
 docker compose up -d --build
 ~~~
 
-详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+默认账号见脚本输出（邮箱默认 `admin@licensehub.local`，密码随机生成或 `--password` 指定）。
+详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)（含故障排查、备份升级、宝塔反代）。
 
 ## 目录结构
 
 ~~~
 license-hub/
-├── apps/api          NestJS 后端（管理端 API + 用户门户 API + 客户端授权 API）
-├── apps/web          React 管理后台 + 用户门户
+├── apps/api          NestJS 后端（管理端 API + 用户门户 API + 客户端授权 API，含 Dockerfile）
+├── apps/web          React 管理后台 + 用户门户（含 Dockerfile / nginx.conf）
 ├── packages/shared   前后端共享类型、枚举、常量
-├── deploy/           Dockerfile / docker-compose / nginx / 环境变量样例
+├── deploy/           docker-compose、init-env.sh、install.sh、备份/恢复/升级脚本
+├── sdk/              客户端 SDK（license-client.ts）与演示脚本
 └── docs/             PRD、架构、数据模型、API、安全、部署、路线图
 ~~~
 
-## 当前状态（M1–M6 已完成并验证）
+## 当前状态（核心里程碑已完成并验证）
 
 ~~~text
-✅ 84 项测试全绿（9 单元 + 75 e2e，真实 HTTP 请求 + 真实 Postgres 语义的 PGlite）
+✅ 132 项测试全绿（单元 + e2e，16 套件；真实 HTTP 请求 + 真实 Postgres 语义的 PGlite）
 ✅ API / Web / 共享包 类型检查 0 错误，生产构建通过
 ✅ 实测链路：上架产品 → 配策略 → 发码（单个/批量/CSV）→ 客户端激活 → 本地 Ed25519 验签 → 心跳 → 解绑 → 吊销
-✅ 管理端页面：概览、产品与策略、授权管理、客户、订单、卡密（实测 0 console 错误）
-✅ 用户门户：注册/登录/找回密码、我的授权与设备自助解绑、我的订单、卡密兑换、账号中心
+✅ 管理端页面：概览、产品与策略、授权管理、客户、订单、卡密、域名、设备、Webhook、审计、设置、团队（实测 0 console 错误）
+✅ 用户门户：注册/登录/找回密码、我的授权与设备自助解绑、我的订单、卡密兑换、域名自助绑定、账号中心
 ✅ Docker Compose 真实镜像构建与服务器部署已验证（postgres/redis/migrate/api/web 全链路，含宝塔反代 + HTTPS）
 ✅ 定时任务：过期置失效 / 到期提醒（幂等）/ Webhook 投递 / 日志清理，均可手动触发
 ✅ Webhook：HMAC 签名 + 退避重试 + 投递日志与重放（线上冒烟已验签通过）
 ✅ 团队与角色：按最小权限分配、会话即时失效、保留至少一个 owner
-✅ Docker 实机构建验证已完成（含「.env 口令与数据卷残留口令不一致」的故障排查，见 docs/DEPLOYMENT.md §9）
 ~~~
 
 ## 客户端接入（三步）
@@ -104,12 +109,12 @@ if (res.ok) {
 }
 ~~~
 
-## 验证（全部可在无 Docker、无 PostgreSQL 的机器上跑）
+## 验证（本地开发机无 Docker 也能跑）
 
 ~~~bash
 pnpm typecheck                                   # 全仓类型检查
-pnpm --filter @license-hub/api test:all          # 单元 + e2e：84 项
-node scripts/acceptance.mjs                      # 端到端验收：全新数据库跑通全部业务流程（42 项）
+pnpm --filter @license-hub/api test:all          # 单元 + e2e：132 项
+node scripts/acceptance.mjs                      # 端到端验收：全新数据库跑通全部业务流程（52 项）
 node scripts/check-docker-config.mjs             # Dockerfile / compose 静态一致性
 node scripts/check-runtime-bundle.mjs            # 复现镜像文件布局，验证迁移与启动可用
 node scripts/ui-smoke.cjs                        # 浏览器冒烟（管理端 10 页）
@@ -118,7 +123,7 @@ node scripts/license-create-smoke.cjs            # 浏览器冒烟（登录 + �
 node sdk/demo.mjs <API_KEY> <LICENSE_KEY>        # 客户端接入演示
 ~~~
 
-### 验收覆盖（scripts/acceptance.mjs，42 项）
+### 验收覆盖（scripts/acceptance.mjs，52 项）
 
 首次启动自动建表 + 引导管理员 → 上架产品/策略 → 生成卡密并导出 CSV → 客户注册兑换 →
 客户端激活（Ed25519 验签 + 篡改拒绝）→ 心跳续期 → 设备超限拒绝 → 门户自助解绑换机 →
@@ -127,23 +132,19 @@ node sdk/demo.mjs <API_KEY> <LICENSE_KEY>        # 客户端接入演示
 
 ### Docker 部署验证说明
 
-本机没有 Docker 守护进程，因此**未执行真实 image build**。已用两种方式逼近验证：
+已在真实服务器完成 `docker compose up -d --build` 全链路验证（postgres/redis/migrate/api/web
+全部 healthy，HTTPS 域名登录通过）。部署前的静态逼近检查仍可单独运行：
 
-1. §check-docker-config.mjs§：Dockerfile 中每个 COPY 源路径真实存在，compose 的服务依赖、卷、
+1. `check-docker-config.mjs`：Dockerfile 中每个 COPY 源路径真实存在，compose 的服务依赖、卷、
    迁移作业命令与 Dockerfile 一致；
-2. §check-runtime-bundle.mjs§：按 Dockerfile 运行阶段的 COPY 清单复制出同样的文件布局，
+2. `check-runtime-bundle.mjs`：按 Dockerfile 运行阶段的 COPY 清单复制出同样的文件布局，
    在其中执行迁移作业并启动 API、登录、建产品 —— 这一步真实发现了「镜像缺少
-   §apps/api/node_modules§ 导致容器启动即崩」的问题（pnpm 符号链接布局所致），已修复。
+   `apps/api/node_modules` 导致容器启动即崩」的问题（pnpm 符号链接布局所致），已修复。
 
-在有 Docker 的机器上，请执行：
-
-~~~bash
-cd deploy && cp .env.example .env   # 替换全部 CHANGE_ME
-docker compose up -d --build
-docker compose logs -f api          # 看到 "LicenseHub API 已启动" 即成功
-~~~
-
-常用命令：
+**最易踩的坑**：重新生成 `POSTGRES_PASSWORD` 后若旧 `pgdata` 卷还在，api 会报
+`password authentication failed` 并反复重启，前端表现为登录 502。
+全新部署用 `docker compose down -v` 清卷；数据要保留则 `ALTER USER` 同步口令
+（见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §9）。
 
 ## 文档
 
@@ -152,8 +153,8 @@ docker compose logs -f api          # 看到 "LicenseHub API 已启动" 即成�
 | [docs/PRD.md](docs/PRD.md) | 产品定位、角色、功能清单、补充建议、非目标 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 后端架构、模块划分、关键流程、部署拓扑 |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | 数据库表结构与状态机 |
-| [docs/API.md](docs/API.md) | 三类 API 全量端点 |
+| [docs/API.md](docs/API.md) | 管理端 / 门户 / 客户端授权 / 支付回调 端点 |
 | [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、密钥管理、授权码存储与签名 |
 | [docs/CLIENT-INTEGRATION.md](docs/CLIENT-INTEGRATION.md) | **客户端对接教程**（桌面软件 / 网站，含多语言验签示例） |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker 部署、备份、升级 |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker 部署、故障排查、备份升级、反代配置 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 里程碑与验收标准 |

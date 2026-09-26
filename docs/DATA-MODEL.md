@@ -25,6 +25,10 @@
 `email unique`、`password_hash null`（可仅凭卡密使用）、`name`、`status (active/blocked)`、
 `email_verified_at`、`notes`、`metadata jsonb`。
 
+### auth_tokens — 一次性令牌（邮箱验证 / 找回密码）
+`subject_type (admin|customer)`、`subject_id`、`purpose (verify_email|reset_password)`、
+`token_hash`（只存哈希）、`expires_at`、`used_at`。用后即废，过期自动清理。
+
 ## 2. 产品与策略
 
 ### products
@@ -88,6 +92,23 @@
 ### trials — 试用防刷台账
 `fingerprint_hash`、`product_id`、`email_hash null`、`first_trial_at`、`count`；唯一索引 `(fingerprint_hash, product_id)`。
 
+### offline_requests — 离线激活
+`license_id`、`device_id`、`request_code`（唯一）、`response_code null`、`status (pending/fulfilled/expired)`、`expires_at`。
+
+## 3.5 域名授权（独立于授权码）
+
+### domain_licenses — 域名授权主表
+`product_id / plan_id`、`customer_id / customer_email`、`status`（同 licenses 状态机）、
+`max_domains`、`allow_subdomains`、`valid_from / expires_at`、`feature_keys`、`notes`。
+与 `licenses` 完全独立，不占用设备额度。
+
+### authorized_domains — 已绑定域名
+`domain_license_id`、`domain`（归一化后，全局唯一索引）、`bound_at`、`bound_by`、`last_verified_at`、`status (active/released)`。
+
+### domain_events — 域名授权事件
+`domain_license_id`、`domain_id null`、`type (created/activated/verified/deactivated/extended/suspended/revoked/domain.bound/domain.unbound)`、
+`actor_type`、`actor_id`、`payload jsonb`。
+
 ## 4. 商业化
 
 ### orders / order_items
@@ -150,8 +171,10 @@ devices:   注册 ──▶ active ──解绑──▶ deactivated ； ──�
 
 ## 7. 索引与约束要点
 - `licenses.key_lookup` 唯一 —— 授权码查重、防重复发放
+- `authorized_domains.domain` 全局唯一 —— 同一域名不能被两张域名授权同时占用
 - `license_activations(license_id, device_id) where status='active'` 部分唯一 —— 防并发重复绑定
 - `payment_events(provider, event_id)` 唯一 —— 支付回调幂等
+- `offline_requests.request_code` 唯一 —— 离线请求防伪造/防重放
 - `verification_logs(license_id, at desc)` —— 心跳查询与保留策略清理
 - `audit_logs(created_at desc)`、`(target_type, target_id)` —— 审计检索
 - 所有外键 `on delete restrict`，避免误删产品导致授权悬空

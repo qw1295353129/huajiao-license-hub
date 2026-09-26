@@ -134,8 +134,8 @@ App ──POST /api/v1/activate {license_key, device, app_version}──▶ API
                             ┌──────▼──────┐
                             │  redis 容器 │
                             └─────────────┘
-   一次性作业：migrate 容器（`pnpm db:migrate`）→ api 启动前完成建表
+   一次性作业：migrate 容器（`node dist/db/migrate-cli.js`）→ api 启动前完成建表
 ~~~
 
 - 所有容器非 root 运行，healthcheck 就绪后再启动依赖方
-- 数据卷：`pgdata`（数据库）、`uploads`（Logo/附件）
+- 数据卷：`pgdata`（PostgreSQL）、`redisdata`（Redis AOF）

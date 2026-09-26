@@ -38,8 +38,8 @@
 ## M4 · 激活链路 ✅
 - [x] Ed25519 签名密钥生成/加密存储/公钥分发（seed 已产出 kid=lk-2026-09）
 - [x] 规范化 JSON 签名与验签（键序无关），单元测试覆盖篡改检测
-- [ ] `/api/v1/activate | verify | deactivate | trial` + API Key 鉴权与限流
-- [ ] 设备绑定与超限策略、设备黑名单、离线激活（request/response code）
+- [x] `/api/v1/activate | verify | deactivate | trial` + API Key 鉴权与限流
+- [x] 设备绑定与超限策略、设备黑名单、离线激活（request/response code）
 - **验收标准**：脚本完成 激活→心跳→超限拒绝→解绑→再激活；授权文件能被独立脚本验签
 
 ## M5 · 商业化 ✅
@@ -62,7 +62,7 @@
 - [x] 管理端：域名列表、强制解绑、清空；门户：域名可见 + 自助解绑
 - [x] SDK 域名方法 + 服务端取域名工具 §currentDomainFromHeaders§
 - [x] 修复：到期提醒按**站点时区**比较日期（原先用数据库会话时区，跨零点会算错一天）
-- **证据**：domain e2e 12 项全绿；验收脚本新增 7 项域名断言，总 49/49
+- **证据**：domain e2e 12 项全绿；验收脚本含域名断言（激活/子域覆盖/未授权拒绝/额度），总 52/52
 
 ## M6 · 运营与集成 ✅
 - [x] 看板聚合接口（KPI + 30 天趋势 + 最近操作 + 即将到期）
@@ -77,13 +77,14 @@
 - [x] 团队与角色：§GET/POST/PATCH /admin/team§、重置密码、停用、防自锁（保留至少一个 owner）+ 团队页面
 
 ## M7 · 交付与验收 ✅
-- [x] 端到端验收脚本 §scripts/acceptance.mjs§：全新数据库上跑通 PRD 成功标准（42 项断言）
+- [x] 端到端验收脚本 §scripts/acceptance.mjs§：全新数据库上跑通 PRD 成功标准（52 项断言）
 - [x] Docker 静态一致性检查 + 镜像文件布局充分性检查（发现并修复镜像缺少 workspace node_modules 的问题）
+- [x] 真实服务器 Docker Compose 构建部署验证（含宝塔反代 + HTTPS 全链路）
 - [x] 客户端 SDK 与可运行演示 §sdk/§
 - [x] 浏览器冒烟脚本（管理端 / 门户）
-- **验收标准**：§node scripts/acceptance.mjs§ 全绿；§test:all§ 84 项全绿
+- **验收标准**：§node scripts/acceptance.mjs§ 全绿；§test:all§ 132 项全绿
 
-## M8 · 前端页面
+## M8 · 前端页面 ✅
 - [x] 登录页（含双因素步骤）、控制台外壳、路由守卫、401 自动刷新
 - [x] 概览页（KPI 卡片 + 趋势图 + 最近操作 + 即将到期）
-- [ ] 产品/授权/客户/订单/卡密/设备/Webhook/审计/设置 页面（当前为占位页，接口就绪后接入）
+- [x] 产品/授权/客户/订单/卡密/设备/Webhook/审计/设置/团队/域名 页面（含详情抽屉与行内操作，实测 0 console 错误）
