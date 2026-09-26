@@ -134,7 +134,16 @@ sync_pg_password() {
     return 0
   fi
   if ! docker compose ps --status running 2>/dev/null | grep -q postgres; then
-    say "ℹ postgres 未在运行，跳过口令同步（首次部署时数据卷会直接用新口令初始化）"
+    # 数据卷还在但 postgres 没跑：多半是上次部署残留，新口令与卷里的旧口令不一致会导致
+    # migrate/api 全线 password authentication failed → 前端 502。这里必须显式警告。
+    if docker volume ls --format '{{.Name}}' 2>/dev/null | grep -qE '(^|_)pgdata$'; then
+      say "⚠ 发现已存在的 postgres 数据卷，但 postgres 未运行。"
+      say "   若本次替换了 POSTGRES_PASSWORD，卷里仍是旧口令，up 后 api 会报 password authentication failed / 502。"
+      say "   全新部署、数据可丢：docker compose down -v && bash init-env.sh"
+      say "   数据要留：先 up 起 postgres，再重跑本脚本同步口令（或手动 ALTER USER）。"
+    else
+      say "ℹ postgres 未在运行且无数据卷，视为首次部署（新口令会在初始化时生效）"
+    fi
     return 0
   fi
   if docker compose exec -T postgres psql -U "$user" -d "$db" \

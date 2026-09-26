@@ -10,7 +10,8 @@
 - [x] React 19 + Vite 8 + HeroUI v3 + Tailwind v4 外壳、路由、请求层（自动刷新令牌）
 - [x] Docker：多阶段 Dockerfile（非 root + tini + healthcheck）、docker-compose（postgres/redis/migrate/api/web）、nginx 反代、备份恢复脚本
 - **证据**：全仓类型检查 0 错误；前后端生产构建通过；`GET /api/health` 实测 200 且含数据库延迟；
-  `test:all` 26 项测试全绿；`docker-compose.yml` 通过 YAML 解析校验（本机无 Docker，未做真实镜像构建）
+  `test:all` 26 项测试全绿；真实服务器 `docker compose up -d --build` 构建并启动全栈（postgres/redis/migrate/api/web healthy，
+  HTTPS 域名登录全链路通过）
 
 ## M2 · 认证与权限 ✅
 - [x] **会话即时失效**：全局守卫在验签后校验会话是否被撤销/过期 —— 改密、停用、踢下线后旧 access token 立即失效

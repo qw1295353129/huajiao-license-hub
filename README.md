@@ -64,11 +64,11 @@ license-hub/
 ✅ 实测链路：上架产品 → 配策略 → 发码（单个/批量/CSV）→ 客户端激活 → 本地 Ed25519 验签 → 心跳 → 解绑 → 吊销
 ✅ 管理端页面：概览、产品与策略、授权管理、客户、订单、卡密（实测 0 console 错误）
 ✅ 用户门户：注册/登录/找回密码、我的授权与设备自助解绑、我的订单、卡密兑换、账号中心
-✅ Docker Compose 与 nginx 配置就绪（本机无 Docker，未做真实镜像构建）
+✅ Docker Compose 真实镜像构建与服务器部署已验证（postgres/redis/migrate/api/web 全链路，含宝塔反代 + HTTPS）
 ✅ 定时任务：过期置失效 / 到期提醒（幂等）/ Webhook 投递 / 日志清理，均可手动触发
 ✅ Webhook：HMAC 签名 + 退避重试 + 投递日志与重放（线上冒烟已验签通过）
 ✅ 团队与角色：按最小权限分配、会话即时失效、保留至少一个 owner
-🚧 待完成：Docker 实机构建验证（本机无 Docker 守护进程，见 docs/ROADMAP.md）
+✅ Docker 实机构建验证已完成（含「.env 口令与数据卷残留口令不一致」的故障排查，见 docs/DEPLOYMENT.md §9）
 ~~~
 
 ## 客户端接入（三步）

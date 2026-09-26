@@ -145,16 +145,28 @@ docker compose exec api node dist/db/admin-cli.js disable-2fa --email admin@exam
 
 ### 3) 启动就失败的常见原因（api 容器反复重启）
 
+- **`.env` 里的 POSTGRES_PASSWORD 与数据卷里已初始化的口令不一致**（实测最常见，表现为前端能打开但登录 502）：
+  - 典型触发：`init-env.sh` / `install.sh --force` 重新生成了口令，但 `pgdata` 卷还在；
+    或多次 `up` 之间改过 `.env` 口令。
+  - 症状：`migrate` 与 `api` 日志均出现 `password authentication failed for user "licensehub"`（FATAL 28P01），
+    api 反复重启，nginx 报 `502` / `connect() failed`。
+  - **全新部署、数据可丢**（最快）：
+    ~~~bash
+    cd deploy && docker compose down -v   # ⚠️ 删数据卷
+    bash init-env.sh                      # 重新生成 .env（口令与新卷一致）
+    docker compose up -d --build
+    ~~~
+  - **数据要留**：用当前 `.env` 里的新口令去改数据库里的口令（见第 4 节 ALTER USER），
+    或把 `.env` 的 `POSTGRES_PASSWORD` 改回数据卷当初初始化时用的旧口令。
 - **`.env` 里的 POSTGRES_PASSWORD / REDIS_PASSWORD 含 `/`（`openssl rand -base64` 的典型输出）**：
   它们被拼进 `postgres://user:口令@postgres:5432/db` 后 URL 解析失败，api 容器报
   `TypeError: Invalid URL (ERR_INVALID_URL)` 后退出 → 前端能打开但登录 502。
-  修法：`openssl rand -hex 24` 生成新口令 + `ALTER USER licensehub WITH PASSWORD '新口令';`（见下），
-  或升级到会自动对特殊字符做百分号编码的版本；
+  修法：`openssl rand -hex 24` 生成新口令 + `ALTER USER licensehub WITH PASSWORD '新口令';`（见下）；
 - `BOOTSTRAP_ADMIN_PASSWORD` 仍为示例口令 `Admin@12345` → 生产直接拒绝启动；
 - `JWT_SECRET` 少于 32 字符；`DATA_KEY` 不是 base64 的 32 字节；
 - `.env` 里的口令含未转义的 `$`（Compose 会当变量插值，实际值与你写的不同）→ 用 `printenv` 核对；
 - `migrate` 作业失败（`docker compose logs migrate`）→ api 永远等不到启动条件；
-- 数据卷残留了上一次部署的库：账号还是旧密码，见第 2 步重置。
+- 数据卷残留了上一次部署的库：账号还是旧密码，见第 2 节 `admin-cli reset`。
 
 ### 4) 把数据库口令换成 URL 安全的（数据不丢）
 
@@ -170,5 +182,29 @@ docker compose exec -T -e PGPASSWORD="$(grep '^POSTGRES_PASSWORD=' .env | cut -d
 ~~~
 
 把 `POSTGRES_PASSWORD=` / `REDIS_PASSWORD=` 改成新口令，再 `docker compose up -d`（改了 env 只重建容器，不会删数据卷）。
+
+## 10. 反向代理实测备忘（宝塔 / 已有 nginx）
+
+服务器上 80/443 已被宝塔等面板占用时，**不要**再让 compose 把 web 映射到 80/443，
+保持默认 `WEB_PORT=8080`，由面板站点反代到 `http://127.0.0.1:8080` 即可。实测可用的关键头：
+
+~~~nginx
+location ^~ / {
+  proxy_pass http://127.0.0.1:8080;
+  proxy_set_header Host $http_host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header X-Forwarded-Host $host;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection $connection_upgrade;
+}
+~~~
+
+注意：
+- `APP_ORIGIN` 必须写成最终对外地址（如 `https://lic.example.com`），否则 CORS 与邮件链接会错；
+- 面板层已做 HTTP→HTTPS 跳转时，容器内 nginx 的 HSTS 可保留（仅 HTTPS 响应生效）；
+- 若面板「禁止访问敏感文件」规则拦掉了 `/.env*` 等，正好是期望行为，无需改。
 
 

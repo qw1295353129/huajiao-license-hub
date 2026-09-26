@@ -74,6 +74,18 @@ if [ -f deploy/.env ]; then
   echo "==> 已备份旧配置到 $BACKUP"
 fi
 
+# 数据卷残留时重新生成口令会导致 password authentication failed / 502，提前拦一道
+if [ "$FORCE" -eq 1 ] && docker volume ls --format '{{.Name}}' 2>/dev/null | grep -qE '(^|_)pgdata$'; then
+  echo "⚠ 检测到已有 postgres 数据卷。--force 会生成新的 POSTGRES_PASSWORD，而卷里仍是旧口令，"
+  echo "   启动后 api 会报 password authentication failed、前端登录 502。"
+  printf '   继续请输 yes（将保留旧数据卷，稍后你需手动 ALTER USER 同步口令）；输 no 退出：'
+  read -r ans
+  if [ "$ans" != "yes" ]; then
+    echo "已取消。全新安装、数据可丢时：cd deploy && docker compose down -v 后再跑本脚本。"
+    exit 1
+  fi
+fi
+
 random_hex() { openssl rand -hex "$1"; }
 # base64 里的 + / = 对 .env 无害（不进 URL），但统一转成 URL 安全字符更省心
 random_b64() { openssl rand -base64 "$1" | tr -d '\n' | tr '+/' '-_'; }
