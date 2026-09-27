@@ -8,7 +8,7 @@ import type { AppConfig } from './config/configuration';
 /** main.ts 与 e2e 测试共用同一套应用配置，避免测试与生产行为漂移。 */
 export async function configureApp(app: INestApplication, config: AppConfig): Promise<void> {
   app.setGlobalPrefix('api');
-  app.enableCors({ origin: [config.appOrigin], credentials: true, exposedHeaders: ['X-Request-Id'] });
+  app.enableCors({ origin: config.corsOrigins, credentials: true, exposedHeaders: ['X-Request-Id'] });
   // API 自身安全头；CSP 由前端 nginx 承担（避免与 Swagger UI / 本地联调冲突过严）
   const fastifyApp = app as unknown as NestFastifyApplication;
   await fastifyApp.register(helmet, {
