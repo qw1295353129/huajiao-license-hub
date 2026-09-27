@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Button, Dropdown, Input, Label, ListBox, Modal, Select, TextArea, TextField, toast,
+  Button, Input, Label, ListBox, Modal, Select, TextArea, TextField, toast,
 } from '@heroui/react';
 import type { Key } from '@heroui/react';
-import { Copy, Download, Plus, Ticket } from 'lucide-react';
+import { Copy, Download, Plus, Ticket, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { Paginated, Plan, ProductRow } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
@@ -125,30 +125,22 @@ export function RedeemPage() {
           >
             <Download size={13} /> 导出
           </Button>
-          <Dropdown>
-            <Dropdown.Trigger className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5" aria-label="更多操作">
-              更多
-            </Dropdown.Trigger>
-            <Dropdown.Popover placement="bottom end">
-              <Dropdown.Menu>
-                <Dropdown.Item
-                  id="void"
-                  onAction={async () => {
-                    if (!window.confirm('作废该批次中所有未使用的卡密？')) return;
-                    try {
-                      const res = await api.delete<{ voided: number }>('/api/admin/redeem/batches/' + row.id);
-                      toast.success('已作废 ' + res.voided + ' 张未使用卡密');
-                      refresh();
-                    } catch (error) {
-                      toast.danger('作废失败', { description: error instanceof Error ? error.message : '' });
-                    }
-                  }}
-                >
-                  作废未使用卡密
-                </Dropdown.Item>
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
+          <Button
+            size="sm"
+            variant="danger-soft"
+            onPress={async () => {
+              if (!window.confirm('作废批次「' + row.name + '」中所有未使用的卡密？已兑换的不受影响。')) return;
+              try {
+                const res = await api.delete<{ voided: number }>('/api/admin/redeem/batches/' + row.id);
+                toast.success('已作废 ' + res.voided + ' 张未使用卡密');
+                refresh();
+              } catch (error) {
+                toast.danger('作废失败', { description: error instanceof Error ? error.message : '' });
+              }
+            }}
+          >
+            <Trash2 size={13} /> 作废
+          </Button>
         </div>
       ),
     },
@@ -175,9 +167,11 @@ export function RedeemPage() {
             }
           }}
         >
-          作废
+          <Trash2 size={13} /> 作废
         </Button>
-      ) : null,
+      ) : (
+        <span className="text-[11px] opacity-40">—</span>
+      ),
     },
   ];
 
