@@ -18,8 +18,20 @@ export function PortalLayout() {
   const siteName = useSiteName();
 
   return (
-    <div className="min-h-dvh bg-gradient-to-b from-brand-50/60 to-white dark:from-neutral-950 dark:to-neutral-950">
-      <header className="border-b border-black/5 bg-white/70 backdrop-blur dark:border-white/8 dark:bg-white/3">
+    <div className="relative min-h-dvh overflow-hidden bg-[#f4f4f6]">
+      {/* 浅色柔光背景 */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 55% 45% at 80% 15%, rgba(255,255,255,0.9), transparent 60%),' +
+            'radial-gradient(ellipse 50% 55% at 90% 90%, rgba(255,255,255,0.75), transparent 58%),' +
+            'linear-gradient(135deg, #ebebf0 0%, #f2f2f5 45%, #f8f8fa 100%)',
+        }}
+      />
+      <div className="relative z-10">
+      <header className="border-b border-neutral-200/70 bg-white/70 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
           <div className="flex items-center gap-2">
             <div className="grid size-7 place-items-center rounded-lg bg-brand-500 text-sm font-bold text-white">L</div>
@@ -51,8 +63,8 @@ export function PortalLayout() {
               className={({ isActive }) =>
                 'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors ' +
                 (isActive
-                  ? 'bg-brand-500/12 font-medium text-brand-500'
-                  : 'opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/5')
+                  ? 'bg-violet-500/10 font-medium text-violet-600'
+                  : 'text-neutral-600 hover:bg-neutral-900/5 hover:text-neutral-900')
               }
             >
               <item.icon size={15} /> {item.label}
@@ -73,6 +85,7 @@ export function PortalLayout() {
         <p className="pb-4 text-center text-[11px] opacity-40">
           {siteName} · 你的授权与订单数据由软件作者自行保管
         </p>
+      </div>
       </div>
     </div>
   );

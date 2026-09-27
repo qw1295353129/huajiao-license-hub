@@ -76,8 +76,8 @@ export function AdminLayout() {
           className={({ isActive }) =>
             'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ' +
             (isActive
-              ? 'bg-brand-500/12 font-medium text-brand-500'
-              : 'opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/5')
+              ? 'bg-violet-500/10 font-medium text-violet-600'
+              : 'text-neutral-600 hover:bg-neutral-900/5 hover:text-neutral-900')
           }
         >
           <item.icon size={16} className="shrink-0" />
@@ -88,17 +88,29 @@ export function AdminLayout() {
   );
 
   return (
-    <div className="flex h-full min-h-dvh">
+    <div className="relative flex h-full min-h-dvh bg-[#f4f4f6]">
+      {/* 浅色柔光背景 */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 55% 45% at 85% 12%, rgba(255,255,255,0.9), transparent 60%),' +
+            'radial-gradient(ellipse 50% 55% at 92% 92%, rgba(255,255,255,0.75), transparent 58%),' +
+            'linear-gradient(135deg, #ebebf0 0%, #f2f2f5 45%, #f8f8fa 100%)',
+        }}
+      />
+
       {/* 桌面侧栏 */}
-      <aside className="hidden w-56 shrink-0 border-r border-black/5 bg-white/60 lg:block dark:border-white/8 dark:bg-white/2">
+      <aside className="relative z-10 hidden w-56 shrink-0 border-r border-neutral-200/70 bg-white/70 backdrop-blur lg:block">
         {sidebar}
       </aside>
 
       {/* 移动端抽屉 */}
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-60 bg-white shadow-xl dark:bg-neutral-900">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 w-60 bg-white shadow-xl">
             <button
               type="button"
               aria-label="关闭菜单"
@@ -112,8 +124,8 @@ export function AdminLayout() {
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-black/5 bg-white/60 px-4 backdrop-blur dark:border-white/8 dark:bg-white/2">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200/70 bg-white/70 px-4 backdrop-blur">
           <div className="flex items-center gap-2">
             <Button
               isIconOnly
