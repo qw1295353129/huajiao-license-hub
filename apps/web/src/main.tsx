@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toast } from '@heroui/react';
+import { Toast } from '@/lib/heroui-compat';
 import { AuthProvider, PortalAuthProvider } from './lib/auth';
 import App from './App';
 import './styles/globals.css';

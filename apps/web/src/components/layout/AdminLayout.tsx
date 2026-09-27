@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Avatar, Button, Dropdown, Separator, Tooltip,
-} from '@heroui/react';
+} from '@/lib/heroui-compat';
 import {
   BarChart3, Boxes, FileClock, Globe, KeyRound, KeySquare, LayoutDashboard, LogOut, Menu, Receipt, Settings,
   ShieldCheck, Ticket, Users, Webhook, X,

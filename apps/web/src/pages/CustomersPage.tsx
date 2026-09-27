@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Input, Label, Modal, TextField, toast } from '@heroui/react';
+import { Button, Input, Label, Modal, TextField, toast } from '@/lib/heroui-compat';
 import { api, qs } from '@/lib/api';
 import type { Paginated } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';

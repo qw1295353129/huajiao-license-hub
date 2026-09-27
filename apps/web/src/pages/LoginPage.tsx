@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Button, Card, Input, Label, FieldError, TextField, toast } from '@heroui/react';
+import { motion } from 'motion/react';
+import { Input, Label, FieldError, TextField, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import { ShieldCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -17,7 +19,6 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 已登录直接跳转：必须用 <Navigate>，不能在渲染期间调用 navigate（React 会报 setState-in-render 警告）
   if (user) return <Navigate to="/admin" replace />;
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -46,74 +47,104 @@ export function LoginPage() {
   };
 
   return (
-    <div className="lh-auth-fields grid min-h-dvh place-items-center bg-gradient-to-br from-brand-50 via-white to-emerald-50 p-4 dark:from-neutral-950 dark:via-neutral-950 dark:to-brand-950">
-      <div className="w-full max-w-sm animate-fade-in">
-        <div className="mb-5 flex flex-col items-center gap-2 text-center">
-          <div className="grid size-11 place-items-center rounded-xl bg-brand-500 text-white shadow-lg">
-            <ShieldCheck size={22} />
+    <div className="relative grid min-h-dvh place-items-center overflow-hidden bg-neutral-950 p-4">
+      {/* 柔光斜切背景：右上 + 右下两道微光 */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 60% 50% at 78% 18%, rgba(180,185,195,0.18), transparent 62%),' +
+            'radial-gradient(ellipse 55% 60% at 88% 88%, rgba(160,168,180,0.14), transparent 60%),' +
+            'radial-gradient(ellipse 45% 40% at 55% 55%, rgba(90,95,110,0.10), transparent 70%),' +
+            'linear-gradient(135deg, #0a0a0c 0%, #111116 42%, #1a1b21 68%, #25262d 100%)',
+        }}
+      />
+
+      {/* 入场动画 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.21, 0.47, 0.32, 0.98] }}
+        className="relative z-10 flex w-full max-w-[420px] flex-col items-center gap-6"
+      >
+        {/* 图标 + 标题 */}
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 240, damping: 20, delay: 0.1 }}
+          className="flex flex-col items-center gap-3"
+        >
+          <div className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-600/30">
+            <ShieldCheck size={24} />
           </div>
-          <h1 className="text-lg font-semibold">{siteName} 控制台</h1>
-        </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">{siteName} 控制台</h1>
+        </motion.div>
 
-        <Card>
-          <Card.Content>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <TextField
-                name="email"
-                type="email"
-                value={email}
-                onChange={setEmail}
-                isRequired
-                fullWidth
-                isInvalid={Boolean(error) && !needsTotp}
-              >
-                <Label>邮箱</Label>
-                <Input autoComplete="username" autoFocus />
+        {/* 表单卡片 */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22, duration: 0.45 }}
+          className="w-full rounded-2xl border border-white/[0.06] bg-[#141418]/90 p-6 shadow-2xl shadow-black/40 backdrop-blur-sm"
+        >
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <TextField name="email" type="email" value={email} onChange={setEmail} isRequired fullWidth>
+              <Label className="text-sm text-neutral-200">邮箱</Label>
+              <Input
+                placeholder=""
+                autoComplete="username"
+                autoFocus
+                className="h-11 rounded-xl border-white/[0.08] bg-[#1c1c22] text-white placeholder:text-neutral-500"
+              />
+            </TextField>
+
+            <TextField name="password" type="password" value={password} onChange={setPassword} isRequired fullWidth>
+              <Label className="text-sm text-neutral-200">密码</Label>
+              <Input
+                placeholder=""
+                autoComplete="current-password"
+                className="h-11 rounded-xl border-white/[0.08] bg-[#1c1c22] text-white placeholder:text-neutral-500"
+              />
+              <FieldError>{error && !needsTotp ? error : ''}</FieldError>
+            </TextField>
+
+            {needsTotp ? (
+              <TextField name="totp" value={totp} onChange={setTotp} isRequired fullWidth>
+                <Label className="text-sm text-neutral-200">动态验证码</Label>
+                <Input
+                  placeholder="6 位数字"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoFocus
+                  className="h-11 rounded-xl border-white/[0.08] bg-[#1c1c22] text-white placeholder:text-neutral-500"
+                />
+                <FieldError>{error && needsTotp ? error : ''}</FieldError>
               </TextField>
+            ) : null}
 
-              <TextField
-                name="password"
-                type="password"
-                value={password}
-                onChange={setPassword}
-                isRequired
-                fullWidth
-                isInvalid={Boolean(error) && !needsTotp}
+            {error && !needsTotp ? (
+              <motion.p
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-400"
               >
-                <Label>密码</Label>
-                <Input autoComplete="current-password" />
-                <FieldError>{error ?? ''}</FieldError>
-              </TextField>
+                {error}
+              </motion.p>
+            ) : null}
 
-              {needsTotp ? (
-                <TextField
-                  name="totp"
-                  value={totp}
-                  onChange={setTotp}
-                  isRequired
-                  fullWidth
-                  isInvalid={Boolean(error)}
-                >
-                  <Label>动态验证码</Label>
-                  <Input placeholder="6 位数字" inputMode="numeric" maxLength={6} autoFocus />
-                  <FieldError>{error ?? ''}</FieldError>
-                </TextField>
-              ) : null}
-
-              {error && !needsTotp ? (
-                <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p>
-              ) : null}
-              {error && needsTotp ? (
-                <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600">{error}</p>
-              ) : null}
-
-              <Button type="submit" variant="primary" fullWidth isDisabled={submitting}>
-                {submitting ? '登录中…' : '登录'}
-              </Button>
-            </form>
-          </Card.Content>
-        </Card>
-      </div>
+            <Button
+              type="submit"
+              variant="secondary"
+              size="lg"
+              className="mt-1 h-11 w-full rounded-xl bg-white text-neutral-900 font-medium shadow-sm hover:bg-neutral-100"
+              disabled={submitting}
+            >
+              {submitting ? '登录中…' : '登录'}
+            </Button>
+          </form>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }

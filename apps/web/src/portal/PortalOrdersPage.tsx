@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, Separator } from '@heroui/react';
+import { Card, Separator } from '@/lib/heroui-compat';
 import { portalApi } from '@/lib/api';
 import { ErrorNotice, Loading, PageHeader, StatusChip } from '@/components/common/ui';
 import { formatDateTime, formatMoney } from '@/lib/format';

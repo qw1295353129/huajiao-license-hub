@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Input, Label, TextField, toast } from '@heroui/react';
+import { Button, Card, Input, Label, TextField, toast } from '@/lib/heroui-compat';
 import { portalApi } from '@/lib/api';
 import { Loading, PageHeader } from '@/components/common/ui';
 import { formatDateTime } from '@/lib/format';

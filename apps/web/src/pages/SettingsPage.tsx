@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button, Card, Chip, Input, Label, Separator, Switch, TextField, toast,
-} from '@heroui/react';
+} from '@/lib/heroui-compat';
 import { Copy, KeyRound, RefreshCw, ShieldCheck, ShieldOff, KeyRoundIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, Chip, Separator } from '@heroui/react';
+import { Card, Chip, Separator } from '@/lib/heroui-compat';
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis,
 } from 'recharts';

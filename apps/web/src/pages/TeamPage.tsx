@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button, Card, Chip, Input, Label, ListBox, Modal, Select, TextField, toast,
-} from '@heroui/react';
-import type { Key } from '@heroui/react';
+} from '@/lib/heroui-compat';
+import type { Key } from '@/lib/heroui-compat';
 import { Plus, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { DataTable, type Column } from '@/components/common/DataTable';

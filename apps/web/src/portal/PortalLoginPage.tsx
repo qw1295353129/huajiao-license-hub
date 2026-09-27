@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Button, Card, FieldError, Input, Label, TextField, toast } from '@heroui/react';
+import { Button, Card, FieldError, Input, Label, TextField, toast } from '@/lib/heroui-compat';
 import { ShieldCheck } from 'lucide-react';
 import { ApiError, portalApi } from '@/lib/api';
 import { usePortalAuth } from '@/lib/auth';

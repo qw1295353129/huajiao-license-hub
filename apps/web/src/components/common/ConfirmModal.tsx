@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Button, Modal, TextArea, TextField, Label } from '@heroui/react';
+import { Button, Modal, TextArea, TextField, Label } from '@/lib/heroui-compat';
 
 /** 危险操作二次确认：可选填写原因（会写入审计/事件）。 */
 export function ConfirmModal({

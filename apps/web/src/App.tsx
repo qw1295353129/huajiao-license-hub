@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { Spinner } from '@heroui/react';
+import { Spinner } from '@/lib/heroui-compat';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { useAuth, usePortalAuth } from '@/lib/auth';
 import { LoginPage } from '@/pages/LoginPage';

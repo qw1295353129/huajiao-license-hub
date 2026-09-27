@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Label, ListBox, Select, toast } from '@heroui/react';
-import type { Key } from '@heroui/react';
+import { Button, Card, Label, ListBox, Select, toast } from '@/lib/heroui-compat';
+import type { Key } from '@/lib/heroui-compat';
 import { ShieldOff } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { ActivationRow, Paginated } from '@/lib/types';

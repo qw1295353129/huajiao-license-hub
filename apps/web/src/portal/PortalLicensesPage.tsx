@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Chip, Separator, toast } from '@heroui/react';
+import { Button, Card, Chip, Separator, toast } from '@/lib/heroui-compat';
 import { Laptop, Smartphone } from 'lucide-react';
 import { portalApi } from '@/lib/api';
 import { ErrorNotice, Loading, PageHeader, StatusChip, Tag } from '@/components/common/ui';

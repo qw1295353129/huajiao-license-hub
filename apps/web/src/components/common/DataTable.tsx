@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Table, EmptyState, Spinner } from '@heroui/react';
+import { Table, EmptyState, Spinner } from '@/lib/heroui-compat';
 
 export interface Column<T> {
   id: string;

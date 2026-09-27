@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Dropdown, Input, Label, ListBox, Modal, Select, TextField, toast } from '@heroui/react';
-import type { Key } from '@heroui/react';
+import { Button, Dropdown, Input, Label, ListBox, Modal, Select, TextField, toast } from '@/lib/heroui-compat';
+import type { Key } from '@/lib/heroui-compat';
 import { Plus, Receipt } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { Paginated, Plan, ProductRow } from '@/lib/types';

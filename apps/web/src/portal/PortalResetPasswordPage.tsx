@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, Input, Label, TextField, toast } from '@heroui/react';
+import { Button, Card, Input, Label, TextField, toast } from '@/lib/heroui-compat';
 import { ApiError, portalApi } from '@/lib/api';
 
 export function PortalResetPasswordPage() {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Chip, Input, Separator, toast } from '@heroui/react';
+import { Button, Card, Chip, Input, Separator, toast } from '@/lib/heroui-compat';
 import { Globe, Plus } from 'lucide-react';
 import { portalApi } from '@/lib/api';
 import type { AuthorizedDomain, DomainLicenseRow } from '@/lib/domain-types';

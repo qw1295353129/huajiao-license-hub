@@ -1,4 +1,4 @@
-import { Button, Card } from '@heroui/react';
+import { Button, Card } from '@/lib/heroui-compat';
 import { Link } from 'react-router-dom';
 
 export function NotFoundPage() {

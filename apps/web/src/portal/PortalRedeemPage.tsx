@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Input, Label, TextField, toast } from '@heroui/react';
+import { Button, Card, Input, Label, TextField, toast } from '@/lib/heroui-compat';
 import { Ticket } from 'lucide-react';
 import { ApiError, portalApi } from '@/lib/api';
 import { PageHeader } from '@/components/common/ui';

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, toast } from '@heroui/react';
+import { Button, Card, toast } from '@/lib/heroui-compat';
 import { ApiError, portalApi } from '@/lib/api';
 
 /** 邮箱验证落地页：邮件链接 /portal/verify-email?token=… */

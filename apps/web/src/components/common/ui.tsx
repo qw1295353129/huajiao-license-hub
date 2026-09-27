@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Card, Chip, Spinner } from '@heroui/react';
+import { Card, Chip, Spinner } from '@/lib/heroui-compat';
 
 /** 全站共享的展示组件：统一视觉，避免每个页面各写一套。 */
 

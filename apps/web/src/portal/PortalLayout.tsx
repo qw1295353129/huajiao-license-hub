@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Button, Card, Separator, toast } from '@heroui/react';
+import { Button, Card, Separator, toast } from '@/lib/heroui-compat';
 import { Globe, KeyRound, LogOut, Receipt, Ticket, User } from 'lucide-react';
 import { usePortalAuth } from '@/lib/auth';
 import { useSiteName } from '@/lib/useSiteInfo';
