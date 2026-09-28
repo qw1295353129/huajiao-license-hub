@@ -1,20 +1,36 @@
 import * as React from "react"
 import { cn } from "cn"
+import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react"
+import { useIsInView } from "@/hooks/use-is-in-view"
+
+// Animate UI 写法：入场时轻微浮起（y 8px → 0 + 淡入，once），
+// 幅度克制，滚动经过时是"安顿下来"而不是"跳出来"。
 
 function Card({
   className,
   size = "default",
+  ref,
   ...props
 }: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+  const reduceMotion = useReducedMotion()
+  const { ref: motionRef, isInView } = useIsInView(ref, {
+    inView: true,
+    inViewOnce: true,
+  })
+
   return (
-    <div
+    <motion.div
+      ref={motionRef}
       data-slot="card"
       data-size={size}
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+      transition={{ type: "spring", stiffness: 220, damping: 28 }}
       className={cn(
         "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         className
       )}
-      {...props}
+      {...(props as HTMLMotionProps<"div">)}
     />
   )
 }

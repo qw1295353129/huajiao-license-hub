@@ -4,8 +4,10 @@
  * 底层渲染全部走 Animate UI（带动画）与 shadcn 基础件。
  */
 import * as React from 'react';
+import { motion } from 'motion/react';
 import { toast as sonnerToast, Toaster as SonnerToaster } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Fade } from '@/components/animate-ui/primitives/effects/fade';
 
 export type Key = string | number;
 
@@ -142,7 +144,17 @@ function Label(props: React.ComponentProps<typeof LabelBase>) {
 
 function FieldError({ children }: { children?: React.ReactNode }) {
   if (!children) return null;
-  return <p className="text-xs text-destructive">{children}</p>;
+  // 错误出现时轻微上浮，提醒感比静态文本强，但不抖动
+  return (
+    <motion.p
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+      className="text-xs text-destructive"
+    >
+      {children}
+    </motion.p>
+  );
 }
 
 // ─── TextField（组合：Label + Input + Error）─────────────────────────
@@ -361,13 +373,18 @@ function EmptyState({ title, description, icon, action, children, className }: {
   children?: React.ReactNode; className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-2 py-10 text-center', className)}>
+    <Fade
+      inView
+      inViewOnce
+      transition={{ type: 'spring', stiffness: 200, damping: 24 }}
+      className={cn('flex flex-col items-center justify-center gap-2 py-10 text-center', className)}
+    >
       {icon ? <div className="text-muted-foreground">{icon}</div> : null}
       {title ? <p className="text-sm font-medium">{title}</p> : null}
       {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       {children}
       {action}
-    </div>
+    </Fade>
   );
 }
 
