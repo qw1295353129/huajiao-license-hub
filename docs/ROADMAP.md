@@ -7,7 +7,7 @@
 - [x] NestJS 12（Fastify）启动、全局校验/异常/日志、`GET /api/health`、`/docs`（OpenAPI）
 - [x] Drizzle schema（28 张表）+ 迁移；**双驱动**：生产 PostgreSQL / 本地与测试 PGlite（WASM）
 - [x] 依赖注入阶段自动迁移（`AUTO_MIGRATE`），容器无需额外步骤
-- [x] React 19 + Vite 8 + HeroUI v3 + Tailwind v4 外壳、路由、请求层（自动刷新令牌）
+- [x] React 19 + Vite 8 + Tailwind v4 外壳、路由、请求层（自动刷新令牌）；UI 先 HeroUI v3，后整体迁移为 shadcn/ui + Animate UI（见 M9）
 - [x] Docker：多阶段 Dockerfile（非 root + tini + healthcheck）、docker-compose（postgres/redis/migrate/api/web）、nginx 反代、备份恢复脚本
 - **证据**：全仓类型检查 0 错误；前后端生产构建通过；`GET /api/health` 实测 200 且含数据库延迟；
   `test:all` 26 项测试全绿；真实服务器 `docker compose up -d --build` 构建并启动全栈（postgres/redis/migrate/api/web healthy，
@@ -88,3 +88,17 @@
 - [x] 登录页（含双因素步骤）、控制台外壳、路由守卫、401 自动刷新
 - [x] 概览页（KPI 卡片 + 趋势图 + 最近操作 + 即将到期）
 - [x] 产品/授权/客户/订单/卡密/设备/Webhook/审计/设置/团队/域名 页面（含详情抽屉与行内操作，实测 0 console 错误）
+
+## M9 · UI 组件迁移与动效化 ✅
+- [x] 移除 HeroUI：改为 shadcn/ui 基础件 + Animate UI 动效组件（copy-in 源码模式）+ Motion；
+      新增 `@/lib/heroui-compat` 兼容层，保持 30 个页面/组件的 HeroUI 风格 API（`is*`、`onPress`、点号复合组件）不变
+- [x] 全站统一浅色柔光风：登录页斜切渐变 + 白卡、侧栏/顶栏浅色、导航 violet 选中态
+- [x] 动效体系：Button/Modal/Dropdown/Switch/Tooltip（Animate UI 原生）；Tabs 指示条 layoutId 滑动 + 内容 blur 切换、
+      Select 弹层 spring 出场/勾选弹入/chevron 旋转、Input/TextArea 聚焦柔光、Spinner 双弧反转、
+      Card 入场浮起、Separator 画线展开、Badge 视口弹入、FieldError 上浮、EmptyState 淡入
+- [x] 减弱动效（`prefers-reduced-motion`）适配：入场/聚焦类动效跟随系统设置，弹层/加载类保持常动
+- [x] 修复 `useIsInView` 的 ref 接线（挂错 ref 会让 IntersectionObserver 不触发、元素卡在入场初态）
+- [x] 发版缓存修复：`index.html` 返回 `no-store`，避免浏览器启发式缓存导致发版后长期拿旧 bundle
+- [x] 文档：`docs/UI-CHEATSHEET.md` 取代过时的 `HEROUI-V3-CHEATSHEET.md`（API 映射、动效约定、装组件与排错）
+- **证据**：web 类型检查 0 错误、生产构建通过；浏览器实测登录全链路、Select 开合/选值、Tabs 切换、Spinner 渲染正常；
+  nginx 配置 `nginx -t` 通过；线上 bundle 与本地构建比对确认部署版本（`index-BrmPGD5y.js` → `index-B4chxd0B.js`）

@@ -8,7 +8,7 @@
 | 层 | 选型 |
 | --- | --- |
 | 前端 | React 19 + TypeScript + Vite 8 + React Router 7 + TanStack Query |
-| UI | HeroUI v3 + Tailwind CSS v4 + Recharts + lucide-react |
+| UI | shadcn/ui + Animate UI 动效组件（Motion）+ Tailwind CSS v4 + Recharts + lucide-react |
 | 后端 | NestJS 12（Fastify 适配器）+ Drizzle ORM |
 | 授权维度 | 两条独立业务线：**授权码**（管设备）与 **域名授权**（管站点，无需授权码） |
 | 数据库 | PostgreSQL 17（本地开发/测试可用内置 PGlite，免安装） |
@@ -70,6 +70,7 @@ license-hub/
 ✅ 实测链路：上架产品 → 配策略 → 发码（单个/批量/CSV）→ 客户端激活 → 本地 Ed25519 验签 → 心跳 → 解绑 → 吊销
 ✅ 管理端页面：概览、产品与策略、授权管理、客户、订单、卡密、域名、设备、Webhook、审计、设置、团队（实测 0 console 错误）
 ✅ 用户门户：注册/登录/找回密码、我的授权与设备自助解绑、我的订单、卡密兑换、域名自助绑定、账号中心
+✅ UI：shadcn/ui + Animate UI 动效体系（Tabs 滑动指示条、Select 弹层、卡片/徽章/分隔线入场、聚焦柔光），全站浅色柔光风
 ✅ Docker Compose 真实镜像构建与服务器部署已验证（postgres/redis/migrate/api/web 全链路，含宝塔反代 + HTTPS）
 ✅ 定时任务：过期置失效 / 到期提醒（幂等）/ Webhook 投递 / 日志清理，均可手动触发
 ✅ Webhook：HMAC 签名 + 退避重试 + 投递日志与重放（线上冒烟已验签通过）
@@ -157,4 +158,5 @@ node sdk/demo.mjs <API_KEY> <LICENSE_KEY>        # 客户端接入演示
 | [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、密钥管理、授权码存储与签名 |
 | [docs/CLIENT-INTEGRATION.md](docs/CLIENT-INTEGRATION.md) | **客户端对接教程**（桌面软件 / 网站，含多语言验签示例） |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker 部署、故障排查、备份升级、反代配置 |
+| [docs/UI-CHEATSHEET.md](docs/UI-CHEATSHEET.md) | **前端 UI 组件速查**（heroui-compat API、Animate UI 动效约定、装组件与排错） |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 里程碑与验收标准 |
