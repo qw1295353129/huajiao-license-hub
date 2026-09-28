@@ -123,15 +123,17 @@ type TextAreaProps = React.ComponentProps<'textarea'> & {
   isRequired?: boolean;
   isInvalid?: boolean;
   isDisabled?: boolean;
+  isReadOnly?: boolean;
   fullWidth?: boolean;
 };
 
-function TextArea({ isRequired, isInvalid, isDisabled, fullWidth, className, ...props }: TextAreaProps) {
+function TextArea({ isRequired, isInvalid, isDisabled, isReadOnly, fullWidth, className, ...props }: TextAreaProps) {
   return (
     <TextareaBase
       required={isRequired}
       aria-invalid={isInvalid || undefined}
       disabled={isDisabled}
+      readOnly={isReadOnly}
       className={cn(fullWidth && 'w-full', isInvalid && 'border-destructive', className)}
       {...props}
     />
@@ -549,6 +551,7 @@ function Select({ name, placeholder, selectedKey, onSelectionChange, isDisabled,
   // 我们用 render-prop 风格的兼容：把 ListBox.Item 转成 SelectItem
   const items: React.ReactElement[] = [];
   const labels: React.ReactElement[] = [];
+  const entries: { value: string; label: React.ReactNode }[] = [];
   React.Children.forEach(children, (child) => {
     if (!React.isValidElement(child)) return;
     if (child.type === Label) labels.push(child);
@@ -556,24 +559,33 @@ function Select({ name, placeholder, selectedKey, onSelectionChange, isDisabled,
       React.Children.forEach((child.props as { children?: React.ReactNode }).children, (inner) => {
         if (React.isValidElement(inner) && (inner.type as { displayName?: string }).displayName === 'ListBox') {
           React.Children.forEach((inner.props as { children?: React.ReactNode }).children, (item) => {
-            if (React.isValidElement(item)) items.push(item);
+            if (React.isValidElement(item)) {
+              items.push(item);
+              const p = item.props as { id?: string; textValue?: string; children?: React.ReactNode };
+              entries.push({ value: String(p.id ?? items.length - 1), label: p.textValue ?? p.children });
+            }
           });
         }
       });
     }
   });
 
+  // 必须恒为受控：传 undefined 会触发「uncontrolled → controlled」切换，
+  // 且选中后弹层卸载会让 Radix 的 Select.Value 取不到文本（表现＝选中即消失）。
+  const selectedValue = selectedKey != null ? String(selectedKey) : '';
+  const selectedLabel = entries.find((entry) => entry.value === selectedValue)?.label;
+
   return (
     <div className={cn('flex flex-col gap-1.5', fullWidth && 'w-full', className)}>
       {labels}
       <SelectRoot
-        value={selectedKey != null ? String(selectedKey) : undefined}
+        value={selectedValue}
         onValueChange={(v) => onSelectionChange?.(v)}
         disabled={isDisabled}
         name={name}
       >
         <SelectTriggerBase className={cn(fullWidth && 'w-full')}>
-          <SelectValueBase placeholder={placeholder} />
+          <SelectValueBase placeholder={placeholder}>{selectedLabel}</SelectValueBase>
         </SelectTriggerBase>
         <SelectContentBase>
           {items.map((item, i) => {
