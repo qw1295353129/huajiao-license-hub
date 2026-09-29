@@ -175,7 +175,7 @@ export function DevicesPage() {
     <div className="animate-fade-in">
       <PageHeader title="设备管理" description="设备绑定、人工审批、强制解绑与硬件黑名单" />
 
-      <div className="mb-3 flex flex-wrap items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-end gap-3">
         <div className="flex gap-1 rounded-lg bg-black/5 p-1 text-xs dark:bg-white/5">
           {([['activations', '绑定记录'], ['devices', '设备注册表']] as const).map(([value, label]) => (
             <button
@@ -193,19 +193,17 @@ export function DevicesPage() {
         </div>
 
         {tab === 'activations' ? (
-          <div className="w-40">
-            <div className="flex flex-col gap-1.5 w-full">
-              <Label>状态</Label>
-              <Select name="status" value={status != null ? String(status) : ''}
-                onValueChange={(v) => { setStatus(v); setPage(1); }}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="全部状态" /></SelectTrigger>
-                <SelectContent>
-                  {['pending', 'active', 'deactivated', 'blocked'].map((value) => (
-                    <SelectItem key={value} value={value}>{value}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground">状态</Label>
+            <Select name="status" value={status != null ? String(status) : ''}
+              onValueChange={(v) => { setStatus(v); setPage(1); }}>
+              <SelectTrigger className="w-32"><SelectValue placeholder="全部状态" /></SelectTrigger>
+              <SelectContent>
+                {['pending', 'active', 'deactivated', 'blocked'].map((value) => (
+                  <SelectItem key={value} value={value}>{value}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         ) : null}
       </div>
