@@ -1,15 +1,25 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import {
-  Button, Card, Input, Label, ListBox, Modal, Select, TextArea, TextField, toast,
-} from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/animate-ui/components/radix/dialog';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { Plus, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { Paginated } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatusChip, Tag } from '@/components/common/ui';
 import { formatDateTime } from '@/lib/format';
+
+type Key = string | number;
 
 interface EndpointRow {
   id: string;
@@ -105,15 +115,15 @@ export function WebhooksPage() {
           <Button
             size="sm"
             variant="ghost"
-            onPress={async () => {
+            onClick={async () => {
               try {
                 const res = await api.post<{ ok: boolean; status: number | null; error?: string }>(
                   '/api/admin/webhooks/' + row.id + '/test', {});
                 if (res.ok) toast.success('测试投递成功（HTTP ' + res.status + '）');
-                else toast.danger('测试投递失败', { description: res.error ?? ('HTTP ' + res.status) });
+                else toast.error('测试投递失败', { description: res.error ?? ('HTTP ' + res.status) });
                 refresh();
               } catch (error) {
-                toast.danger('测试失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('测试失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -122,13 +132,13 @@ export function WebhooksPage() {
           <Button
             size="sm"
             variant="ghost"
-            onPress={async () => {
+            onClick={async () => {
               try {
                 await api.patch('/api/admin/webhooks/' + row.id, { status: row.status === 'active' ? 'disabled' : 'active' });
                 toast.success(row.status === 'active' ? '已停用' : '已启用');
                 refresh();
               } catch (error) {
-                toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -136,15 +146,16 @@ export function WebhooksPage() {
           </Button>
           <Button
             size="sm"
-            variant="danger-soft"
-            onPress={async () => {
+            variant="destructive"
+            className="bg-destructive text-white"
+            onClick={async () => {
               if (!window.confirm('删除该 Webhook？投递记录会一并删除。')) return;
               try {
                 await api.delete('/api/admin/webhooks/' + row.id);
                 toast.success('已删除');
                 refresh();
               } catch (error) {
-                toast.danger('删除失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('删除失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -183,14 +194,14 @@ export function WebhooksPage() {
         <Button
           size="sm"
           variant="ghost"
-          onPress={async () => {
+          onClick={async () => {
             try {
               const res = await api.post<{ ok: boolean }>('/api/admin/webhooks/deliveries/' + row.id + '/replay', {});
               if (res.ok) toast.success('重放成功');
-              else toast.danger('重放失败');
+              else toast.error('重放失败');
               refresh();
             } catch (error) {
-              toast.danger('重放失败', { description: error instanceof Error ? error.message : '' });
+              toast.error('重放失败', { description: error instanceof Error ? error.message : '' });
             }
           }}
         >
@@ -211,24 +222,24 @@ export function WebhooksPage() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card><Card.Content>
+        <Card><CardContent>
           <p className="text-xs opacity-55">待投递</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums">{backlog.data?.pendingWebhookDeliveries ?? '—'}</p>
-        </Card.Content></Card>
-        <Card><Card.Content>
+        </CardContent></Card>
+        <Card><CardContent>
           <p className="text-xs opacity-55">7 天内到期授权</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums">{backlog.data?.licensesExpiringIn7Days ?? '—'}</p>
-        </Card.Content></Card>
-        <Card><Card.Content>
+        </CardContent></Card>
+        <Card><CardContent>
           <p className="text-xs opacity-55">端点数量</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums">{endpoints.data?.length ?? '—'}</p>
-        </Card.Content></Card>
-        <Card><Card.Content>
+        </CardContent></Card>
+        <Card><CardContent>
           <p className="text-xs opacity-55">失败投递</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums text-rose-500">
             {endpoints.data ? endpoints.data.reduce((sum, row) => sum + row.stats.failed, 0) : '—'}
           </p>
-        </Card.Content></Card>
+        </CardContent></Card>
       </div>
 
       <DataTable
@@ -244,29 +255,29 @@ export function WebhooksPage() {
         <h2 className="text-sm font-medium">投递日志</h2>
         <div className="flex items-center gap-2">
           <div className="w-36">
-            <Select name="deliveryStatus" placeholder="全部状态" selectedKey={deliveryStatus}
-              onSelectionChange={(key) => { setDeliveryStatus(key); setDeliveriesPage(1); }} fullWidth>
-              <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-              <Select.Popover>
-                <ListBox>
+            <div className="flex flex-col gap-1.5 w-full">
+              <Select name="deliveryStatus" value={deliveryStatus != null ? String(deliveryStatus) : ''}
+                onValueChange={(key) => { setDeliveryStatus(key); setDeliveriesPage(1); }}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="全部状态" /></SelectTrigger>
+                <SelectContent>
                   {['pending', 'success', 'failed'].map((value) => (
-                    <ListBox.Item key={value} id={value} textValue={value}>{value}</ListBox.Item>
+                    <SelectItem key={value} value={value}>{value}</SelectItem>
                   ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <Button
             size="sm"
             variant="ghost"
-            onPress={async () => {
+            onClick={async () => {
               try {
                 const res = await api.post<{ requeued: number }>(
                   '/api/admin/webhooks/deliveries/replay-failed' + qs({}), {});
                 toast.success('已重新入队 ' + res.requeued + ' 条失败投递');
                 refresh();
               } catch (error) {
-                toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -308,85 +319,82 @@ function CreateWebhookModal({ events, onDone }: { events: string[]; onDone: () =
       toast.success('Webhook 已创建');
       onDone();
     } catch (error) {
-      toast.danger('创建失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('创建失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={(next) => { setOpen(next); if (!next) setCreated(null); }}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-        <Plus size={15} /> 添加 Webhook
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable={!created} variant="blur">
-        <Modal.Container size="lg" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>{created ? 'Webhook 已创建' : '添加 Webhook'}</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              {created ? (
-                <>
-                  <p className="text-sm">
-                    请把下面的签名密钥保存到你的接收端，用于校验 <code>X-LH-Signature</code>。
-                    <span className="text-rose-500">密钥仅此一次展示。</span>
-                  </p>
-                  <TextArea readOnly rows={2} value={created.secret} className="mono-code text-xs" />
-                  <div className="rounded-lg bg-black/5 p-3 text-[11px] leading-relaxed dark:bg-white/5">
-                    <p className="font-medium">验签方法</p>
-                    <p className="mono-code mt-1">signature = 'sha256=' + HMAC_SHA256(secret, timestamp + '.' + rawBody)</p>
-                    <p className="mt-1 opacity-70">请求头：X-LH-Event / X-LH-Delivery / X-LH-Timestamp / X-LH-Signature</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <TextField name="url" value={url} onChange={setUrl} isRequired fullWidth>
-                    <Label>接收地址</Label>
-                    <Input placeholder="https://example.com/licensehub/webhook" />
-                  </TextField>
-                  <TextField name="description" value={description} onChange={setDescription} fullWidth>
-                    <Label>备注</Label>
-                    <Input placeholder="例如：飞书机器人" />
-                  </TextField>
-                  <div>
-                    <p className="mb-1.5 text-xs opacity-60">订阅事件（点击切换）</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {events.map((event) => {
-                        const active = selected.includes(event);
-                        return (
-                          <button
-                            key={event}
-                            type="button"
-                            onClick={() => setSelected(active ? selected.filter((item) => item !== event) : [...selected, event])}
-                            className={
-                              'rounded-full border px-2.5 py-1 text-[11px] transition-colors ' +
-                              (active
-                                ? 'border-brand-500 bg-brand-500/12 text-brand-500'
-                                : 'border-black/10 opacity-60 hover:opacity-100 dark:border-white/15')
-                            }
-                          >
-                            {event}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
-            </Modal.Body>
-            {created ? null : (
-              <Modal.Footer>
-                <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-                <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !url || selected.length === 0}>
-                  {busy ? '创建中…' : '创建'}
-                </Button>
-              </Modal.Footer>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setCreated(null); }}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <Plus size={15} /> 添加 Webhook
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{created ? 'Webhook 已创建' : '添加 Webhook'}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          {created ? (
+            <>
+              <p className="text-sm">
+                请把下面的签名密钥保存到你的接收端，用于校验 <code>X-LH-Signature</code>。
+                <span className="text-rose-500">密钥仅此一次展示。</span>
+              </p>
+              <Textarea readOnly rows={2} value={created.secret} className="mono-code text-xs" />
+              <div className="rounded-lg bg-black/5 p-3 text-[11px] leading-relaxed dark:bg-white/5">
+                <p className="font-medium">验签方法</p>
+                <p className="mono-code mt-1">signature = 'sha256=' + HMAC_SHA256(secret, timestamp + '.' + rawBody)</p>
+                <p className="mt-1 opacity-70">请求头：X-LH-Event / X-LH-Delivery / X-LH-Timestamp / X-LH-Signature</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>接收地址</Label>
+                <Input name="url" value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://example.com/licensehub/webhook" />
+              </div>
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>备注</Label>
+                <Input name="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="例如：飞书机器人" />
+              </div>
+              <div>
+                <p className="mb-1.5 text-xs opacity-60">订阅事件（点击切换）</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {events.map((event) => {
+                    const active = selected.includes(event);
+                    return (
+                      <button
+                        key={event}
+                        type="button"
+                        onClick={() => setSelected(active ? selected.filter((item) => item !== event) : [...selected, event])}
+                        className={
+                          'rounded-full border px-2.5 py-1 text-[11px] transition-colors ' +
+                          (active
+                            ? 'border-brand-500 bg-brand-500/12 text-brand-500'
+                            : 'border-black/10 opacity-60 hover:opacity-100 dark:border-white/15')
+                        }
+                      >
+                        {event}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {created ? null : (
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+            <Button variant="default" className="bg-primary text-primary-foreground" onClick={() => void submit()} disabled={busy || !url || selected.length === 0}>
+              {busy ? '创建中…' : '创建'}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

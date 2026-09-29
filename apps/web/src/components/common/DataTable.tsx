@@ -1,5 +1,7 @@
-import type { ReactNode } from 'react';
-import { Table, EmptyState, Spinner } from '@/lib/heroui-compat';
+import { Fragment, type ReactNode } from 'react';
+import { Spinner } from '@/components/ui/spinner';
+import { Fade } from '@/components/animate-ui/primitives/effects/fade';
+import { cn } from '@/lib/utils';
 
 export interface Column<T> {
   id: string;
@@ -11,8 +13,7 @@ export interface Column<T> {
 }
 
 /**
- * 统一列表表格：HeroUI v3 的 Table.Content 承载集合 API。
- * 注意 v3 的 Table 根是 div，aria-label 等必须挂在 Table.Content 上。
+ * 统一列表表格：语义化 HTML table，外层滚动容器承载横向滚动与边框。
  */
 export function DataTable<T extends { id: string }>({
   ariaLabel,
@@ -32,49 +33,69 @@ export function DataTable<T extends { id: string }>({
   footer?: ReactNode;
 }) {
   return (
-    <Table>
-      <Table.ScrollContainer>
-        <Table.Content aria-label={ariaLabel}>
-          <Table.Header columns={columns}>
-            {(column: Column<T>) => (
-              <Table.Column id={column.id} isRowHeader={column.isRowHeader} className={column.width}>
-                <span className={column.align === 'right' ? 'block text-right' : undefined}>{column.label}</span>
-              </Table.Column>
+    <div className="w-full">
+      <div className="w-full overflow-x-auto rounded-lg border border-border">
+        <table className="w-full caption-bottom text-sm" aria-label={ariaLabel}>
+          <thead className="border-b border-border bg-muted/40">
+            <tr>
+              {columns.map((column, i) => (
+                <Fragment key={i}>
+                  <th
+                    scope={column.isRowHeader ? 'row' : undefined}
+                    className={cn('px-3 py-2 text-left text-xs font-medium text-muted-foreground', column.width)}
+                  >
+                    <span className={column.align === 'right' ? 'block text-right' : undefined}>{column.label}</span>
+                  </th>
+                </Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.length ? (
+              items.map((item, i) => (
+                <Fragment key={item.id ?? i}>
+                  <tr data-id={item.id} className="border-b border-border transition-colors hover:bg-muted/30">
+                    {columns.map((column) => (
+                      <td
+                        key={column.id}
+                        className={cn('px-3 py-2.5 align-middle', column.align === 'right' ? 'text-right' : undefined)}
+                      >
+                        {column.render(item)}
+                      </td>
+                    ))}
+                  </tr>
+                </Fragment>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={99} className="p-0">
+                  <Fade
+                    inView
+                    inViewOnce
+                    transition={{ type: 'spring', stiffness: 200, damping: 24 }}
+                    className="flex flex-col items-center justify-center gap-2 py-10 text-center"
+                  >
+                    {isLoading ? (
+                      <span className="inline-flex items-center gap-2 text-sm opacity-60">
+                        <Spinner className="size-4" /> 加载中…
+                      </span>
+                    ) : (
+                      <span className="block">
+                        <span className="block text-sm font-medium">{emptyTitle}</span>
+                        {emptyDescription ? (
+                          <span className="mt-1 block text-xs opacity-55">{emptyDescription}</span>
+                        ) : null}
+                      </span>
+                    )}
+                  </Fade>
+                </td>
+              </tr>
             )}
-          </Table.Header>
-          <Table.Body
-            items={items}
-            renderEmptyState={() => (
-              <EmptyState className="py-10 text-center">
-                {isLoading ? (
-                  <span className="inline-flex items-center gap-2 text-sm opacity-60">
-                    <Spinner size="sm" /> 加载中…
-                  </span>
-                ) : (
-                  <span className="block">
-                    <span className="block text-sm font-medium">{emptyTitle}</span>
-                    {emptyDescription ? (
-                      <span className="mt-1 block text-xs opacity-55">{emptyDescription}</span>
-                    ) : null}
-                  </span>
-                )}
-              </EmptyState>
-            )}
-          >
-            {(item: T) => (
-              <Table.Row id={item.id}>
-                {columns.map((column) => (
-                  <Table.Cell key={column.id} className={column.align === 'right' ? 'text-right' : undefined}>
-                    {column.render(item)}
-                  </Table.Cell>
-                ))}
-              </Table.Row>
-            )}
-          </Table.Body>
-        </Table.Content>
-      </Table.ScrollContainer>
+          </tbody>
+        </table>
+      </div>
       {footer}
-    </Table>
+    </div>
   );
 }
 

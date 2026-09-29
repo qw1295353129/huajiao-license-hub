@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Chip, Separator, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 import { Laptop, Smartphone } from 'lucide-react';
 import { portalApi } from '@/lib/api';
 import { ErrorNotice, Loading, PageHeader, StatusChip, Tag } from '@/components/common/ui';
@@ -56,11 +60,11 @@ export function PortalLicensesPage() {
 
       {items.length === 0 ? (
         <Card>
-          <Card.Content>
+          <CardContent>
             <p className="py-8 text-center text-sm opacity-60">
               还没有授权。购买后授权会自动出现在这里；如果你拿到的是卡密，请到「卡密兑换」页兑换。
             </p>
-          </Card.Content>
+          </CardContent>
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
@@ -99,12 +103,12 @@ function LicenseCard({ license, expanded, onToggle }: { license: MyLicense; expa
       void queryClient.invalidateQueries({ queryKey: ['portal-license', license.id] });
       void queryClient.invalidateQueries({ queryKey: ['portal-licenses'] });
     },
-    onError: (error: Error) => toast.danger('解绑失败', { description: error.message }),
+    onError: (error: Error) => toast.error('解绑失败', { description: error.message }),
   });
 
   return (
     <Card>
-      <Card.Content>
+      <CardContent>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -120,13 +124,23 @@ function LicenseCard({ license, expanded, onToggle }: { license: MyLicense; expa
           </div>
           <div className="flex flex-col items-end gap-2">
             {license.expiresAt ? (
-              <Chip color={days !== null && days < 0 ? 'danger' : days !== null && days <= 14 ? 'warning' : 'success'} size="sm" variant="soft">
-                <Chip.Label>{days !== null && days < 0 ? '已过期' : '剩 ' + days + ' 天'}</Chip.Label>
-              </Chip>
+              <Badge
+                variant="outline"
+                className={
+                  (days !== null && days < 0
+                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                    : days !== null && days <= 14
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400') +
+                  ' text-[11px] px-2 py-0.5'
+                }
+              >
+                {days !== null && days < 0 ? '已过期' : '剩 ' + days + ' 天'}
+              </Badge>
             ) : (
-              <Chip color="accent" size="sm" variant="soft"><Chip.Label>永久</Chip.Label></Chip>
+              <Badge variant="outline" className="bg-primary/15 text-primary text-[11px] px-2 py-0.5">永久</Badge>
             )}
-            <Button size="sm" variant="ghost" onPress={onToggle}>{expanded ? '收起' : '管理设备'}</Button>
+            <Button size="sm" variant="ghost" onClick={onToggle}>{expanded ? '收起' : '管理设备'}</Button>
           </div>
         </div>
 
@@ -160,9 +174,10 @@ function LicenseCard({ license, expanded, onToggle }: { license: MyLicense; expa
                   {device.status === 'active' ? (
                     <Button
                       size="sm"
-                      variant="danger-soft"
-                      isDisabled={unbind.isPending}
-                      onPress={() => {
+                      variant="destructive"
+                      className="bg-destructive text-white"
+                      disabled={unbind.isPending}
+                      onClick={() => {
                         if (window.confirm('确认解绑该设备？解绑后该设备需要重新激活。')) unbind.mutate(device.id);
                       }}
                     >
@@ -174,7 +189,7 @@ function LicenseCard({ license, expanded, onToggle }: { license: MyLicense; expa
             </ul>
           </>
         ) : null}
-      </Card.Content>
+      </CardContent>
     </Card>
   );
 }

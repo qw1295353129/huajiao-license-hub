@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import {
-  Button, Card, Chip, Input, Label, ListBox, Modal, Select, TextArea, TextField, toast,
-} from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/animate-ui/components/radix/dialog';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 import { API_KEY_SCOPES, type ApiKeyScope } from '@license-hub/shared';
 import { Copy, Eye, KeySquare, Plus, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
@@ -11,6 +18,8 @@ import type { ApiKeyRow, Paginated, ProductRow } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatCard, StatusChip, Tag } from '@/components/common/ui';
 import { fromNow } from '@/lib/format';
+
+type Key = string | number;
 
 const SCOPE_LABEL: Record<ApiKeyScope, string> = {
   'license:read': '查询权益',
@@ -72,13 +81,13 @@ export function ApiKeysPage() {
           <Button
             size="sm"
             variant="ghost"
-            onPress={async () => {
+            onClick={async () => {
               try {
                 const res = await api.get<{ key: string }>('/api/admin/api-keys/' + row.id + '/reveal');
                 void navigator.clipboard.writeText(res.key);
-                toast.success('密钥已复制到剪贴板', { description: res.key, timeout: 0 });
+                toast.success('密钥已复制到剪贴板', { description: res.key, duration: Infinity });
               } catch (error) {
-                toast.danger('无法查看', { description: error instanceof Error ? error.message : '' });
+                toast.error('无法查看', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -87,7 +96,7 @@ export function ApiKeysPage() {
           <Button
             size="sm"
             variant="ghost"
-            onPress={async () => {
+            onClick={async () => {
               const next = row.status === 'active' ? true : false;
               if (next && !window.confirm('吊销该密钥？使用它的客户端会立即失效。')) return;
               try {
@@ -95,7 +104,7 @@ export function ApiKeysPage() {
                 toast.success(next ? '已吊销' : '已恢复');
                 refresh();
               } catch (error) {
-                toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -103,15 +112,16 @@ export function ApiKeysPage() {
           </Button>
           <Button
             size="sm"
-            variant="danger-soft"
-            onPress={async () => {
+            variant="destructive"
+            className="bg-destructive text-white"
+            onClick={async () => {
               if (!window.confirm('删除密钥「' + row.name + '」？删除后无法恢复，使用它的客户端会立即失效。')) return;
               try {
                 await api.delete('/api/admin/api-keys/' + row.id);
                 toast.success('已删除');
                 refresh();
               } catch (error) {
-                toast.danger('删除失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('删除失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -164,12 +174,12 @@ export function ApiKeysPage() {
       />
 
       <Card className="mt-4">
-        <Card.Content>
+        <CardContent>
           <p className="text-xs opacity-60">
             用法：客户端在请求头带上 <code className="mono-code">X-Api-Key: lh_live_xxx</code> 调用
             <code className="mono-code"> /api/v1/activate</code> 等接口。作用域遵循最小权限，例如只发码不校验时不要勾「心跳校验」。
           </p>
-        </Card.Content>
+        </CardContent>
       </Card>
     </div>
   );
@@ -196,98 +206,111 @@ function CreateApiKeyModal({ products, onDone }: { products: ProductRow[]; onDon
       toast.success('密钥已创建并复制到剪贴板');
       onDone();
     } catch (error) {
-      toast.danger('创建失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('创建失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={(next) => { setOpen(next); if (!next) setCreated(null); }}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-        <Plus size={15} /> 新建密钥
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable={!created} variant="blur">
-        <Modal.Container size="md" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>{created ? '密钥已创建' : '新建接口密钥'}</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              {created ? (
-                <>
-                  <p className="text-sm">
-                    请立即保存：<span className="text-rose-500">明文只显示这一次</span>（已复制到剪贴板），
-                    之后只能在本页点「查看」重新复制。
-                  </p>
-                  <TextArea readOnly rows={2} value={created} className="mono-code text-xs" />
-                </>
-              ) : (
-                <>
-                  <TextField name="name" value={name} onChange={setName} isRequired fullWidth>
-                    <Label>名称</Label>
-                    <Input placeholder="例如：桌面客户端 v1" />
-                  </TextField>
+    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setCreated(null); }}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <Plus size={15} /> 新建密钥
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{created ? '密钥已创建' : '新建接口密钥'}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          {created ? (
+            <>
+              <p className="text-sm">
+                请立即保存：<span className="text-rose-500">明文只显示这一次</span>（已复制到剪贴板），
+                之后只能在本页点「查看」重新复制。
+              </p>
+              <Textarea readOnly rows={2} value={created} className="mono-code text-xs" />
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>名称</Label>
+                <Input
+                  name="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="例如：桌面客户端 v1"
+                  required
+                />
+              </div>
 
-                  <div>
-                    <p className="mb-1.5 text-xs opacity-60">作用域（点击切换，建议按最小权限勾选）</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {API_KEY_SCOPES.map((scope) => {
-                        const active = scopes.includes(scope);
-                        return (
-                          <button
-                            key={scope}
-                            type="button"
-                            onClick={() => setScopes(active ? scopes.filter((item) => item !== scope) : [...scopes, scope])}
-                            className={
-                              'rounded-full border px-2.5 py-1 text-[11px] transition-colors ' +
-                              (active
-                                ? 'border-brand-500 bg-brand-500/12 text-brand-500'
-                                : 'border-black/10 opacity-60 hover:opacity-100 dark:border-white/15')
-                            }
-                          >
-                            {SCOPE_LABEL[scope] ?? scope}
-                            <span className="ml-1 opacity-50">{scope}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+              <div>
+                <p className="mb-1.5 text-xs opacity-60">作用域（点击切换，建议按最小权限勾选）</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {API_KEY_SCOPES.map((scope) => {
+                    const active = scopes.includes(scope);
+                    return (
+                      <button
+                        key={scope}
+                        type="button"
+                        onClick={() => setScopes(active ? scopes.filter((item) => item !== scope) : [...scopes, scope])}
+                        className={
+                          'rounded-full border px-2.5 py-1 text-[11px] transition-colors ' +
+                          (active
+                            ? 'border-brand-500 bg-brand-500/12 text-brand-500'
+                            : 'border-black/10 opacity-60 hover:opacity-100 dark:border-white/15')
+                        }
+                      >
+                        {SCOPE_LABEL[scope] ?? scope}
+                        <span className="ml-1 opacity-50">{scope}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-                  <Select name="product" placeholder="不限制产品" selectedKey={productId}
-                    onSelectionChange={setProductId} fullWidth>
-                    <Label>绑定产品（可选）</Label>
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {products.map((product) => (
-                          <ListBox.Item key={product.id} id={product.id} textValue={product.name}>{product.name}</ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                </>
-              )}
-            </Modal.Body>
-            {created ? (
-              <Modal.Footer>
-                <Chip color="success" size="sm" variant="soft"><Chip.Label>已复制</Chip.Label></Chip>
-                <Button variant="ghost" onPress={() => { void navigator.clipboard.writeText(created); toast.success('已再次复制'); }}>
-                  <Copy size={14} /> 再复制一次
-                </Button>
-              </Modal.Footer>
-            ) : (
-              <Modal.Footer>
-                <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-                <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !name || scopes.length === 0}>
-                  {busy ? '创建中…' : '创建并复制'}
-                </Button>
-              </Modal.Footer>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>绑定产品（可选）</Label>
+                <Select
+                  name="product"
+                  value={productId != null ? String(productId) : ''}
+                  onValueChange={(v) => setProductId(v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="不限制产品" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={String(product.id)}>{product.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </div>
+        {created ? (
+          <DialogFooter>
+            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] px-2 py-0.5">已复制</Badge>
+            <Button variant="ghost" onClick={() => { void navigator.clipboard.writeText(created); toast.success('已再次复制'); }}>
+              <Copy size={14} /> 再复制一次
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+            <Button
+              variant="default"
+              className="bg-primary text-primary-foreground"
+              onClick={() => void submit()}
+              disabled={busy || !name || scopes.length === 0}
+            >
+              {busy ? '创建中…' : '创建并复制'}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

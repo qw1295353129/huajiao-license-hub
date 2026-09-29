@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import {
-  Button, Card, Chip, Input, Label, ListBox, Modal, Select, TextField, toast,
-} from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/animate-ui/components/radix/dialog';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 import { Plus, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { DataTable, type Column } from '@/components/common/DataTable';
 import { Loading, PageHeader, StatusChip } from '@/components/common/ui';
 import { fromNow } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
+
+type Key = string | number;
 
 interface TeamMember {
   id: string;
@@ -58,9 +66,18 @@ export function TeamPage() {
       id: 'role', label: '角色',
       render: (row) => (
         <div className="flex flex-col gap-0.5">
-          <Chip color={row.role === 'owner' ? 'accent' : row.role === 'admin' ? 'success' : 'default'} size="sm" variant="soft">
-            <Chip.Label>{ROLE_LABEL[row.role]}</Chip.Label>
-          </Chip>
+          <Badge
+            variant="outline"
+            className={
+              (row.role === 'owner'
+                ? 'bg-primary/15 text-primary'
+                : row.role === 'admin'
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-muted text-foreground') + ' text-[11px] px-2 py-0.5'
+            }
+          >
+            {ROLE_LABEL[row.role]}
+          </Badge>
           <span className="text-[11px] opacity-45">{ROLE_DESC[row.role]}</span>
         </div>
       ),
@@ -69,8 +86,8 @@ export function TeamPage() {
     {
       id: 'security', label: '双因素',
       render: (row) => (row.totpEnabled
-        ? <Chip color="success" size="sm" variant="soft"><Chip.Label>已开启</Chip.Label></Chip>
-        : <Chip color="warning" size="sm" variant="soft"><Chip.Label>未开启</Chip.Label></Chip>),
+        ? <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] px-2 py-0.5">已开启</Badge>
+        : <Badge variant="outline" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[11px] px-2 py-0.5">未开启</Badge>),
     },
     {
       id: 'login', label: '最近登录',
@@ -85,44 +102,44 @@ export function TeamPage() {
       id: 'actions', label: '操作', align: 'right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          <Select
-            name={'role-' + row.id}
-            placeholder="角色"
-            selectedKey={row.role}
-            onSelectionChange={async (key) => {
-              if (!key || key === row.role) return;
-              try {
-                await api.patch('/api/admin/auth/team/' + row.id, { role: String(key) });
-                toast.success('角色已更新（对方需重新登录生效）');
-                refresh();
-              } catch (error) {
-                toast.danger('更新失败', { description: error instanceof Error ? error.message : '' });
-              }
-            }}
-            isDisabled={row.id === user?.id}
-            className="w-28"
-          >
-            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
-              <ListBox>
+          <div className="flex flex-col gap-1.5 w-28">
+            <Select
+              name={'role-' + row.id}
+              value={row.role}
+              disabled={row.id === user?.id}
+              onValueChange={async (key) => {
+                if (!key || key === row.role) return;
+                try {
+                  await api.patch('/api/admin/auth/team/' + row.id, { role: String(key) });
+                  toast.success('角色已更新（对方需重新登录生效）');
+                  refresh();
+                } catch (error) {
+                  toast.error('更新失败', { description: error instanceof Error ? error.message : '' });
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="角色" />
+              </SelectTrigger>
+              <SelectContent>
                 {(['owner', 'admin', 'support', 'readonly'] as const).map((role) => (
-                  <ListBox.Item key={role} id={role} textValue={ROLE_LABEL[role]}>{ROLE_LABEL[role]}</ListBox.Item>
+                  <SelectItem key={role} value={role}>{ROLE_LABEL[role]}</SelectItem>
                 ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+              </SelectContent>
+            </Select>
+          </div>
 
           <Button
             size="sm"
             variant="ghost"
-            onPress={async () => {
+            onClick={async () => {
               if (!window.confirm('为该成员生成新的随机密码？其所有会话会被立即注销。')) return;
               try {
                 const res = await api.post<{ password: string }>('/api/admin/auth/team/' + row.id + '/reset-password', {});
                 void navigator.clipboard.writeText(res.password);
-                toast.success('新密码已复制到剪贴板', { description: res.password, timeout: 0 });
+                toast.success('新密码已复制到剪贴板', { description: res.password, duration: Infinity });
               } catch (error) {
-                toast.danger('重置失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('重置失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -131,9 +148,10 @@ export function TeamPage() {
 
           <Button
             size="sm"
-            variant={row.status === 'active' ? 'danger-soft' : 'ghost'}
-            isDisabled={row.id === user?.id}
-            onPress={async () => {
+            variant={row.status === 'active' ? 'destructive' : 'ghost'}
+            className={row.status === 'active' ? 'bg-destructive text-white' : undefined}
+            disabled={row.id === user?.id}
+            onClick={async () => {
               const next = row.status === 'active' ? 'disabled' : 'active';
               if (next === 'disabled' && !window.confirm('停用该成员？其会话会立即失效。')) return;
               try {
@@ -141,7 +159,7 @@ export function TeamPage() {
                 toast.success(next === 'disabled' ? '已停用' : '已启用');
                 refresh();
               } catch (error) {
-                toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -158,10 +176,10 @@ export function TeamPage() {
     return (
       <div className="animate-fade-in">
         <PageHeader title="团队与角色" />
-        <Card><Card.Content>
+        <Card><CardContent>
           <p className="text-sm text-rose-500">无法访问：{message}</p>
           <p className="mt-2 text-xs opacity-60">团队管理仅限 owner 角色。</p>
-        </Card.Content></Card>
+        </CardContent></Card>
       </div>
     );
   }
@@ -182,7 +200,7 @@ export function TeamPage() {
       />
 
       <Card className="mt-4">
-        <Card.Content>
+        <CardContent>
           <div className="flex items-start gap-2 text-xs opacity-70">
             <ShieldCheck size={15} className="mt-0.5 shrink-0" />
             <div className="flex flex-col gap-1">
@@ -192,7 +210,7 @@ export function TeamPage() {
               <p>· 建议所有成员开启双因素（设置 → 安全）。</p>
             </div>
           </div>
-        </Card.Content>
+        </CardContent>
       </Card>
     </div>
   );
@@ -219,60 +237,84 @@ function InviteMemberModal({ onDone }: { onDone: () => void }) {
       setEmail(''); setName(''); setPassword('');
       onDone();
     } catch (error) {
-      toast.danger('添加失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('添加失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={setOpen}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-        <Plus size={15} /> 添加成员
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable variant="blur">
-        <Modal.Container size="md" placement="center">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>添加团队成员</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              <TextField name="email" type="email" value={email} onChange={setEmail} isRequired fullWidth>
-                <Label>邮箱</Label>
-                <Input placeholder="teammate@example.com" />
-              </TextField>
-              <TextField name="name" value={name} onChange={setName} fullWidth>
-                <Label>姓名</Label>
-                <Input placeholder="小张" />
-              </TextField>
-              <TextField name="password" value={password} onChange={setPassword} isRequired fullWidth>
-                <Label>初始密码</Label>
-                <Input placeholder="至少 8 位，含字母与数字" />
-              </TextField>
-              <Select name="role" placeholder="选择角色" selectedKey={role} onSelectionChange={setRole} fullWidth>
-                <Label>角色</Label>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {(['admin', 'support', 'readonly', 'owner'] as const).map((item) => (
-                      <ListBox.Item key={item} id={item} textValue={ROLE_LABEL[item]}>
-                        {ROLE_LABEL[item]} · {ROLE_DESC[item]}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-              <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !email || password.length < 8}>
-                {busy ? '添加中…' : '添加'}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <Plus size={15} /> 添加成员
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>添加团队成员</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>邮箱</Label>
+            <Input
+              name="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="teammate@example.com"
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>姓名</Label>
+            <Input
+              name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="小张"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>初始密码</Label>
+            <Input
+              name="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="至少 8 位，含字母与数字"
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>角色</Label>
+            <Select
+              name="role"
+              value={role != null ? String(role) : ''}
+              onValueChange={(v) => setRole(v)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="选择角色" />
+              </SelectTrigger>
+              <SelectContent>
+                {(['admin', 'support', 'readonly', 'owner'] as const).map((item) => (
+                  <SelectItem key={item} value={item}>{ROLE_LABEL[item]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+          <Button
+            variant="default"
+            className="bg-primary text-primary-foreground"
+            onClick={() => void submit()}
+            disabled={busy || !email || password.length < 8}
+          >
+            {busy ? '添加中…' : '添加'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

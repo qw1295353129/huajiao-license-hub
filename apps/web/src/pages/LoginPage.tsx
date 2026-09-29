@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Input, Label, FieldError, TextField, toast } from '@/lib/heroui-compat';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { Button } from '@/components/animate-ui/components/buttons/button';
 import { ShieldCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api';
@@ -89,38 +91,52 @@ export function LoginPage() {
           className="w-full rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xl shadow-neutral-200/60"
         >
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            <TextField name="email" type="email" value={email} onChange={setEmail} isRequired fullWidth>
+            <div className="flex flex-col gap-1.5 w-full">
               <Label className="text-sm text-neutral-700">邮箱</Label>
               <Input
+                name="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 placeholder=""
                 autoComplete="username"
                 autoFocus
                 className="h-11 rounded-xl border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400"
               />
-            </TextField>
+            </div>
 
-            <TextField name="password" type="password" value={password} onChange={setPassword} isRequired fullWidth>
+            <div className="flex flex-col gap-1.5 w-full">
               <Label className="text-sm text-neutral-700">密码</Label>
               <Input
+                name="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
                 placeholder=""
                 autoComplete="current-password"
                 className="h-11 rounded-xl border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400"
               />
-              <FieldError>{error && !needsTotp ? error : ''}</FieldError>
-            </TextField>
+              {error && !needsTotp ? <p className="text-xs text-destructive">{error}</p> : null}
+            </div>
 
             {needsTotp ? (
-              <TextField name="totp" value={totp} onChange={setTotp} isRequired fullWidth>
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label className="text-sm text-neutral-700">动态验证码</Label>
                 <Input
+                  name="totp"
+                  value={totp}
+                  onChange={(e) => setTotp(e.target.value)}
+                  required
                   placeholder="6 位数字"
                   inputMode="numeric"
                   maxLength={6}
                   autoFocus
                   className="h-11 rounded-xl border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400"
                 />
-                <FieldError>{error && needsTotp ? error : ''}</FieldError>
-              </TextField>
+                {error && needsTotp ? <p className="text-xs text-destructive">{error}</p> : null}
+              </div>
             ) : null}
 
             {error && !needsTotp ? (

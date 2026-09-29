@@ -1,13 +1,18 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Label, ListBox, Select, toast } from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from 'sonner';
 import { ShieldOff } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { ActivationRow, Paginated } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatusChip, Tag } from '@/components/common/ui';
 import { formatDateTime, fromNow } from '@/lib/format';
+
+type Key = string | number;
 
 interface DeviceRow {
   id: string;
@@ -77,14 +82,15 @@ export function DevicesPage() {
           {row.status === 'pending' ? (
             <Button
               size="sm"
-              variant="primary"
-              onPress={async () => {
+              variant="default"
+              className="bg-primary text-primary-foreground"
+              onClick={async () => {
                 try {
                   await api.post('/api/admin/activations/' + row.id + '/approve', {});
                   toast.success('已批准该设备');
                   refresh();
                 } catch (error) {
-                  toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+                  toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
                 }
               }}
             >
@@ -94,15 +100,16 @@ export function DevicesPage() {
           {row.status === 'active' ? (
             <Button
               size="sm"
-              variant="danger-soft"
-              onPress={async () => {
+              variant="destructive"
+              className="bg-destructive text-white"
+              onClick={async () => {
                 if (!window.confirm('强制解绑该设备？')) return;
                 try {
                   await api.delete('/api/admin/activations/' + row.id);
                   toast.success('已解绑');
                   refresh();
                 } catch (error) {
-                  toast.danger('解绑失败', { description: error instanceof Error ? error.message : '' });
+                  toast.error('解绑失败', { description: error instanceof Error ? error.message : '' });
                 }
               }}
             >
@@ -138,8 +145,9 @@ export function DevicesPage() {
       render: (row) => (
         <Button
           size="sm"
-          variant={row.blacklisted ? 'ghost' : 'danger-soft'}
-          onPress={async () => {
+          variant={row.blacklisted ? 'ghost' : 'destructive'}
+          className={row.blacklisted ? undefined : 'bg-destructive text-white'}
+          onClick={async () => {
             if (!row.blacklisted && !window.confirm('封禁该设备？其所有授权会被立即解绑。')) return;
             try {
               await api.post('/api/admin/devices/' + row.id + '/blacklist', {
@@ -149,7 +157,7 @@ export function DevicesPage() {
               toast.success(row.blacklisted ? '已解封' : '已封禁');
               refresh();
             } catch (error) {
-              toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+              toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
             }
           }}
         >
@@ -186,18 +194,18 @@ export function DevicesPage() {
 
         {tab === 'activations' ? (
           <div className="w-40">
-            <Select name="status" placeholder="全部状态" selectedKey={status}
-              onSelectionChange={(key) => { setStatus(key); setPage(1); }} fullWidth>
+            <div className="flex flex-col gap-1.5 w-full">
               <Label>状态</Label>
-              <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-              <Select.Popover>
-                <ListBox>
+              <Select name="status" value={status != null ? String(status) : ''}
+                onValueChange={(v) => { setStatus(v); setPage(1); }}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="全部状态" /></SelectTrigger>
+                <SelectContent>
                   {['pending', 'active', 'deactivated', 'blocked'].map((value) => (
-                    <ListBox.Item key={value} id={value} textValue={value}>{value}</ListBox.Item>
+                    <SelectItem key={value} value={value}>{value}</SelectItem>
                   ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         ) : null}
       </div>
@@ -230,11 +238,11 @@ export function DevicesPage() {
       )}
 
       <Card className="mt-4">
-        <Card.Content>
+        <CardContent>
           <p className="text-xs opacity-60">
             设备指纹只以 HMAC 哈希形式存储，无法反推原始硬件信息；封禁设备会同时解绑它在所有授权上的绑定。
           </p>
-        </Card.Content>
+        </CardContent>
       </Card>
     </div>
   );

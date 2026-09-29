@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Input, Label, TextField } from '@/lib/heroui-compat';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { api, qs } from '@/lib/api';
 import type { Paginated } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
@@ -88,22 +89,22 @@ export function AuditPage() {
 
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <div className="w-56">
-          <TextField name="action" value={action} onChange={(value) => { setAction(value); setPage(1); }} fullWidth>
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>动作包含</Label>
-            <Input placeholder="license / webhook …" />
-          </TextField>
+            <Input name="action" value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }} placeholder="license / webhook …" />
+          </div>
         </div>
         <div className="w-56">
-          <TextField name="actor" value={actor} onChange={(value) => { setActor(value); setPage(1); }} fullWidth>
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>操作者邮箱</Label>
-            <Input placeholder="admin@example.com" />
-          </TextField>
+            <Input name="actor" value={actor} onChange={(e) => { setActor(e.target.value); setPage(1); }} placeholder="admin@example.com" />
+          </div>
         </div>
         <div className="w-56">
-          <TextField name="target" value={targetId} onChange={(value) => { setTargetId(value); setPage(1); }} fullWidth>
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>目标 ID</Label>
-            <Input placeholder="授权 / 订单 / 客户 UUID" />
-          </TextField>
+            <Input name="target" value={targetId} onChange={(e) => { setTargetId(e.target.value); setPage(1); }} placeholder="授权 / 订单 / 客户 UUID" />
+          </div>
         </div>
       </div>
 

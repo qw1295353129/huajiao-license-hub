@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Input, Label, TextField, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { portalApi } from '@/lib/api';
 import { Loading, PageHeader } from '@/components/common/ui';
 import { formatDateTime } from '@/lib/format';
@@ -25,7 +29,7 @@ export function PortalAccountPage() {
       toast.success('已保存');
       await me.refetch();
     } catch (error) {
-      toast.danger('保存失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('保存失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
@@ -42,7 +46,7 @@ export function PortalAccountPage() {
       setCurrentPassword('');
       setNewPassword('');
     } catch (error) {
-      toast.danger('修改失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('修改失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setPwdBusy(false);
     }
@@ -53,52 +57,61 @@ export function PortalAccountPage() {
       <PageHeader title="账号" description="修改昵称与密码" />
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <Card.Header>
-            <Card.Title>账号信息</Card.Title>
-            <Card.Description>
+          <CardHeader>
+            <CardTitle>账号信息</CardTitle>
+            <CardDescription>
               注册于 {me.data ? formatDateTime(me.data.createdAt) : '—'} · 授权 {me.data?.licenseCount ?? 0} 个 · 订单 {me.data?.orderCount ?? 0} 笔
-            </Card.Description>
-          </Card.Header>
-          <Card.Content>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="flex flex-col gap-4">
-              <TextField name="email" value={me.data?.email ?? ''} isReadOnly fullWidth>
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label>登录邮箱</Label>
-                <Input />
-              </TextField>
-              <TextField name="name" value={name || me.data?.name || ''} onChange={setName} fullWidth>
+                <Input name="email" value={me.data?.email ?? ''} readOnly />
+              </div>
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label>昵称</Label>
-                <Input placeholder="怎么称呼你" />
-              </TextField>
-              <Button variant="primary" size="sm" onPress={() => void saveName()} isDisabled={busy}>
+                <Input
+                  name="name" value={name || me.data?.name || ''} onChange={(e) => setName(e.target.value)}
+                  placeholder="怎么称呼你"
+                />
+              </div>
+              <Button variant="default" size="sm" className="bg-primary text-primary-foreground" onClick={() => void saveName()} disabled={busy}>
                 {busy ? '保存中…' : '保存昵称'}
               </Button>
             </div>
-          </Card.Content>
+          </CardContent>
         </Card>
 
         <Card>
-          <Card.Header>
-            <Card.Title>修改密码</Card.Title>
-            <Card.Description>修改后其它设备的登录会被注销</Card.Description>
-          </Card.Header>
-          <Card.Content>
+          <CardHeader>
+            <CardTitle>修改密码</CardTitle>
+            <CardDescription>修改后其它设备的登录会被注销</CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="flex flex-col gap-4">
-              <TextField name="current" type="password" value={currentPassword} onChange={setCurrentPassword} fullWidth>
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label>当前密码</Label>
-                <Input autoComplete="current-password" />
-              </TextField>
-              <TextField name="next" type="password" value={newPassword} onChange={setNewPassword} fullWidth>
+                <Input
+                  name="current" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label>新密码</Label>
-                <Input placeholder="至少 8 位，含字母与数字" autoComplete="new-password" />
-              </TextField>
-              <Button variant="secondary" size="sm" onPress={() => void savePassword()} isDisabled={pwdBusy}>
+                <Input
+                  name="next" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="至少 8 位，含字母与数字" autoComplete="new-password"
+                />
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => void savePassword()} disabled={pwdBusy}>
                 修改密码
               </Button>
               <p className="text-[11px] opacity-50">
                 忘记当前密码时：退出登录 → 登录页「忘记密码」→ 邮箱收取重置链接。
               </p>
             </div>
-          </Card.Content>
+          </CardContent>
         </Card>
       </div>
     </div>

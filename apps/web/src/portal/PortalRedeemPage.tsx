@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Input, Label, TextField, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { ApiError, portalApi } from '@/lib/api';
 import { PageHeader } from '@/components/common/ui';
@@ -37,12 +41,17 @@ export function PortalRedeemPage() {
     <div className="animate-fade-in">
       <PageHeader title="卡密兑换" description="把购买的卡密兑换为正式授权" />
       <Card className="max-w-lg">
-        <Card.Content>
+        <CardContent>
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <TextField name="code" value={code} onChange={setCode} isRequired fullWidth isInvalid={Boolean(error)}>
+            <div className="flex flex-col gap-1.5 w-full">
               <Label>卡密</Label>
-              <Input placeholder="XXXX-XXXX-XXXX-XXXX" className="mono-code" autoFocus />
-            </TextField>
+              <Input
+                name="code" value={code} onChange={(e) => setCode(e.target.value)}
+                placeholder="XXXX-XXXX-XXXX-XXXX" autoFocus required
+                aria-invalid={Boolean(error) || undefined}
+                className={error ? 'mono-code border-destructive' : 'mono-code'}
+              />
+            </div>
             {error ? <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
             {result ? (
               <div className="rounded-lg bg-emerald-500/10 px-3 py-3 text-xs">
@@ -51,11 +60,11 @@ export function PortalRedeemPage() {
                 <p className="mt-1 opacity-60">授权已出现在「我的授权」中，可直接填入软件激活窗口。</p>
               </div>
             ) : null}
-            <Button type="submit" variant="primary" isDisabled={busy || code.trim().length < 6}>
+            <Button type="submit" variant="default" className="bg-primary text-primary-foreground" disabled={busy || code.trim().length < 6}>
               <Ticket size={15} /> {busy ? '兑换中…' : '立即兑换'}
             </Button>
           </form>
-        </Card.Content>
+        </CardContent>
       </Card>
     </div>
   );

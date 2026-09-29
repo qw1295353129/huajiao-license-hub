@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import { Card, Chip, Spinner } from '@/lib/heroui-compat';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 /** 全站共享的展示组件：统一视觉，避免每个页面各写一套。 */
 
@@ -36,14 +39,14 @@ export function StatCard({ label, value, hint, icon, tone = 'default' }: {
 }) {
   return (
     <Card>
-      <Card.Content>
+      <CardContent>
         <div className="flex items-start justify-between gap-2">
           <p className="text-xs opacity-55">{label}</p>
           {icon ? <span className={TONE_CLASS[tone]}>{icon}</span> : null}
         </div>
         <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
         {hint ? <p className="mt-1 text-[11px] opacity-45">{hint}</p> : null}
-      </Card.Content>
+      </CardContent>
     </Card>
   );
 }
@@ -51,7 +54,7 @@ export function StatCard({ label, value, hint, icon, tone = 'default' }: {
 export function Loading({ label = '加载中…' }: { label?: string }) {
   return (
     <div className="flex items-center justify-center gap-2 py-16 text-sm opacity-60">
-      <Spinner size="sm" />
+      <Spinner className="size-4" />
       {label}
     </div>
   );
@@ -89,16 +92,32 @@ const STATUS_META: Record<string, { label: string; color: 'default' | 'accent' |
   void: { label: '已作废', color: 'default' },
 };
 
+const CHIP_CLASS: Record<string, string> = {
+  default: 'bg-muted text-foreground',
+  accent: 'bg-primary/15 text-primary',
+  success: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  warning: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  danger: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+};
+
 export function StatusChip({ status, size = 'sm' }: { status: string; size?: 'sm' | 'md' | 'lg' }) {
   const meta = STATUS_META[status] ?? { label: status, color: 'default' as const };
-  return <Chip color={meta.color} size={size} variant="soft"><Chip.Label>{meta.label}</Chip.Label></Chip>;
+  return (
+    <Badge variant="outline" className={cn(CHIP_CLASS[meta.color], size === 'sm' && 'text-[11px] px-2 py-0.5')}>
+      {meta.label}
+    </Badge>
+  );
 }
 
 export function Tag({ children, color = 'default' }: {
   children: ReactNode;
   color?: 'default' | 'accent' | 'success' | 'warning' | 'danger';
 }) {
-  return <Chip color={color} size="sm" variant="soft"><Chip.Label>{children}</Chip.Label></Chip>;
+  return (
+    <Badge variant="outline" className={cn(CHIP_CLASS[color], 'text-[11px] px-2 py-0.5')}>
+      {children}
+    </Badge>
+  );
 }
 
 /** 键值展示行 */

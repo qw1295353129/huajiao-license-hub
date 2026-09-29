@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import {
-  Button, Dropdown, Input, Label, ListBox, Modal, Select, TextArea, TextField, toast,
-} from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/animate-ui/components/radix/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/animate-ui/components/radix/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { Globe, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { Paginated, Plan, ProductRow } from '@/lib/types';
@@ -11,6 +19,8 @@ import type { DomainLicenseDetail, DomainLicenseRow, DomainStats } from '@/lib/d
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatCard, StatusChip, Tag } from '@/components/common/ui';
 import { daysLeft, formatDateTime, fromNow } from '@/lib/format';
+
+type Key = string | number;
 
 /**
  * 域名授权：与授权码完全分开的一条线。
@@ -85,28 +95,28 @@ export function DomainLicensesPage() {
       id: 'actions', label: '操作', align: 'right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" variant="ghost" onPress={() => setDetailId(row.id)}>域名管理</Button>
-          <Dropdown>
-            <Dropdown.Trigger className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5" aria-label="更多操作">
-              更多
-            </Dropdown.Trigger>
-            <Dropdown.Popover placement="bottom end">
-              <Dropdown.Menu>
-                <Dropdown.Item id="extend" onAction={() => void extend(row.id, 365, refresh)}>
-                  <RefreshCw size={13} /> 延长 1 年
-                </Dropdown.Item>
-                <Dropdown.Item id="toggle" onAction={() => void transition(row.id, row.status === 'suspended' ? 'resume' : 'suspend', refresh)}>
-                  {row.status === 'suspended' ? '恢复授权' : '暂停授权'}
-                </Dropdown.Item>
-                <Dropdown.Item id="revoke" onAction={() => void revoke(row.id, refresh)}>
-                  <Trash2 size={13} /> 吊销授权
-                </Dropdown.Item>
-                <Dropdown.Item id="delete" onAction={() => void deleteDomainLicense(row, refresh)}>
-                  <Trash2 size={13} /> 删除域名授权
-                </Dropdown.Item>
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
+          <Button size="sm" variant="ghost" onClick={() => setDetailId(row.id)}>域名管理</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5" aria-label="更多操作">
+                更多
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => void extend(row.id, 365, refresh)}>
+                <RefreshCw size={13} /> 延长 1 年
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void transition(row.id, row.status === 'suspended' ? 'resume' : 'suspend', refresh)}>
+                {row.status === 'suspended' ? '恢复授权' : '暂停授权'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void revoke(row.id, refresh)}>
+                <Trash2 size={13} /> 吊销授权
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void deleteDomainLicense(row, refresh)}>
+                <Trash2 size={13} /> 删除域名授权
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -130,10 +140,13 @@ export function DomainLicensesPage() {
       </div>
 
       <div className="mb-3 w-72">
-        <TextField name="search" value={search} onChange={(value) => { setSearch(value); setPage(1); }} fullWidth>
+        <div className="flex flex-col gap-1.5 w-full">
           <Label>搜索</Label>
-          <Input placeholder="域名 / 客户邮箱 / 备注" />
-        </TextField>
+          <Input
+            name="search" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="域名 / 客户邮箱 / 备注"
+          />
+        </div>
       </div>
 
       <DataTable
@@ -162,7 +175,7 @@ async function transition(id: string, action: 'revoke' | 'suspend' | 'resume', r
     toast.success('状态已更新');
     refresh();
   } catch (error) {
-    toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -192,7 +205,7 @@ async function deleteDomainLicense(row: DomainLicenseRow, refresh: () => void) {
     });
     refresh();
   } catch (error) {
-    toast.danger('删除失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('删除失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -202,7 +215,7 @@ async function extend(id: string, days: number, refresh: () => void) {
     toast.success('已延长 ' + days + ' 天');
     refresh();
   } catch (error) {
-    toast.danger('延期失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('延期失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -241,7 +254,7 @@ function CreateDomainLicenseModal({ products, onDone }: { products: ProductRow[]
       if (res.failedDomains.length > 0) {
         toast.warning('部分域名未绑定', {
           description: res.failedDomains.map((item) => item.domain + '：' + item.message).join('；'),
-          timeout: 0,
+          duration: Infinity,
         });
       } else {
         toast.success('已开通域名授权并绑定 ' + res.addedDomains.length + ' 个域名');
@@ -250,83 +263,91 @@ function CreateDomainLicenseModal({ products, onDone }: { products: ProductRow[]
       setEmail(''); setDomains(''); setNotes('');
       onDone();
     } catch (error) {
-      toast.danger('开通失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('开通失败', { description: error instanceof Error ? error.message : '未知错误' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={setOpen}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-        <Plus size={15} /> 开通域名授权
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable variant="blur">
-        <Modal.Container size="md" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>开通域名授权</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              <Select name="product" placeholder="选择产品" selectedKey={productId}
-                onSelectionChange={(key) => { setProductId(key); setPlanId(null); }} isRequired fullWidth>
-                <Label>产品</Label>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {products.map((product) => (
-                      <ListBox.Item key={product.id} id={product.id} textValue={product.name}>{product.name}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <Plus size={15} /> 开通域名授权
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>开通域名授权</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>产品</Label>
+            <Select name="product" required value={productId != null ? String(productId) : ''}
+              onValueChange={(v) => { setProductId(v); setPlanId(null); }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="选择产品" />
+              </SelectTrigger>
+              <SelectContent>
+                {products.map((product) => (
+                  <SelectItem key={product.id} value={String(product.id)}>{product.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <Select name="plan" placeholder={productId ? '选择套餐' : '请先选择产品'} selectedKey={planId}
-                onSelectionChange={setPlanId} isRequired fullWidth isDisabled={!productId}>
-                <Label>套餐（决定到期时间与域名额度）</Label>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {domainPlans.map((plan) => (
-                      <ListBox.Item key={plan.id} id={plan.id} textValue={plan.name}>
-                        {plan.name} · {plan.maxDomains} 个域名 · {plan.durationDays ? plan.durationDays + ' 天' : '长期'}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              {productId && domainPlans.length === 0 ? (
-                <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
-                  该产品下没有开启域名授权的套餐。请先到「产品与策略」里给套餐填写「域名授权」额度。
-                </p>
-              ) : null}
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>套餐（决定到期时间与域名额度）</Label>
+            <Select name="plan" required disabled={!productId} value={planId != null ? String(planId) : ''}
+              onValueChange={setPlanId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={productId ? '选择套餐' : '请先选择产品'} />
+              </SelectTrigger>
+              <SelectContent>
+                {domainPlans.map((plan) => (
+                  <SelectItem key={plan.id} value={String(plan.id)}>{plan.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {productId && domainPlans.length === 0 ? (
+            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+              该产品下没有开启域名授权的套餐。请先到「产品与策略」里给套餐填写「域名授权」额度。
+            </p>
+          ) : null}
 
-              <TextField name="email" type="email" value={email} onChange={setEmail} fullWidth>
-                <Label>归属客户邮箱（可选）</Label>
-                <Input placeholder="buyer@example.com —— 填了客户可在门户自助增删域名" />
-              </TextField>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>归属客户邮箱（可选）</Label>
+            <Input
+              name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="buyer@example.com —— 填了客户可在门户自助增删域名"
+            />
+          </div>
 
-              <TextField name="domains" value={domains} onChange={setDomains} fullWidth>
-                <Label>要授权的域名（可选，多个用换行或逗号分隔）</Label>
-                <TextArea rows={3} placeholder="shop.example.com, blog.example.com" className="mono-code" />
-              </TextField>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>要授权的域名（可选，多个用换行或逗号分隔）</Label>
+            <Textarea
+              name="domains" value={domains} onChange={(e) => setDomains(e.target.value)}
+              rows={3} placeholder="shop.example.com, blog.example.com" className="mono-code"
+            />
+          </div>
 
-              <TextField name="notes" value={notes} onChange={setNotes} fullWidth>
-                <Label>备注</Label>
-                <Input placeholder="订单号 / 渠道" />
-              </TextField>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-              <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !productId || !planId}>
-                {busy ? '开通中…' : '开通'}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>备注</Label>
+            <Input
+              name="notes" value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="订单号 / 渠道"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+          <Button variant="default" className="bg-primary text-primary-foreground" onClick={() => void submit()} disabled={busy || !productId || !planId}>
+            {busy ? '开通中…' : '开通'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -336,7 +357,6 @@ function DomainDetailModal({ id, onClose, onChanged }: { id: string | null; onCl
   const queryClient = useQueryClient();
   const [newDomain, setNewDomain] = useState('');
   const [busy, setBusy] = useState(false);
-
   const detail = useQuery({
     queryKey: ['domain-license', id],
     queryFn: () => api.get<DomainLicenseDetail>('/api/admin/domain-licenses/' + id),
@@ -356,7 +376,7 @@ function DomainDetailModal({ id, onClose, onChanged }: { id: string | null; onCl
       setNewDomain('');
       refresh();
     } catch (error) {
-      toast.danger('绑定失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('绑定失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
@@ -365,103 +385,99 @@ function DomainDetailModal({ id, onClose, onChanged }: { id: string | null; onCl
   const data = detail.data;
 
   return (
-    <Modal isOpen={Boolean(id)} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Modal.Backdrop isDismissable variant="blur">
-        <Modal.Container size="lg" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>域名管理</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              {detail.isLoading ? <p className="text-sm opacity-60">加载中…</p> : null}
-              {data ? (
-                <>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                    <Field label="产品" value={data.productName} />
-                    <Field label="套餐" value={data.planName + '（' + data.planCode + '）'} />
-                    <Field label="归属" value={data.customerEmail ?? '未绑定客户'} />
-                    <Field label="状态" value={<StatusChip status={data.status} />} />
-                    <Field label="到期" value={data.expiresAt ? formatDateTime(data.expiresAt) : '长期有效'} />
-                    <Field label="子域名" value={data.allowSubdomains ? '允许（含 *.域名）' : '不允许'} />
-                    <Field label="最近校验" value={fromNow(data.lastVerifiedAt)} />
-                    <Field label="备注" value={data.notes ?? '—'} />
-                  </div>
+    <Dialog open={Boolean(id)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>域名管理</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          {detail.isLoading ? <p className="text-sm opacity-60">加载中…</p> : null}
+          {data ? (
+            <>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <Field label="产品" value={data.productName} />
+                <Field label="套餐" value={data.planName + '（' + data.planCode + '）'} />
+                <Field label="归属" value={data.customerEmail ?? '未绑定客户'} />
+                <Field label="状态" value={<StatusChip status={data.status} />} />
+                <Field label="到期" value={data.expiresAt ? formatDateTime(data.expiresAt) : '长期有效'} />
+                <Field label="子域名" value={data.allowSubdomains ? '允许（含 *.域名）' : '不允许'} />
+                <Field label="最近校验" value={fromNow(data.lastVerifiedAt)} />
+                <Field label="备注" value={data.notes ?? '—'} />
+              </div>
 
-                  <section>
-                    <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-                      <Globe size={14} /> 已授权域名
-                      <span className="text-xs font-normal opacity-50">{data.domainCount} / {data.maxDomains}</span>
-                    </h3>
+              <section>
+                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+                  <Globe size={14} /> 已授权域名
+                  <span className="text-xs font-normal opacity-50">{data.domainCount} / {data.maxDomains}</span>
+                </h3>
 
-                    <div className="mb-3 flex gap-2">
-                      <Input
-                        placeholder="example.com 或 https://www.example.com"
-                        value={newDomain}
-                        onChange={(event) => setNewDomain(event.target.value)}
-                        className="mono-code"
-                      />
-                      <Button variant="primary" size="sm" isDisabled={busy || newDomain.trim().length < 3} onPress={() => void addDomain()}>
-                        绑定
-                      </Button>
-                    </div>
+                <div className="mb-3 flex gap-2">
+                  <Input
+                    placeholder="example.com 或 https://www.example.com"
+                    value={newDomain}
+                    onChange={(event) => setNewDomain(event.target.value)}
+                    className="mono-code"
+                  />
+                  <Button variant="default" className="bg-primary text-primary-foreground" size="sm" disabled={busy || newDomain.trim().length < 3} onClick={() => void addDomain()}>
+                    绑定
+                  </Button>
+                </div>
 
-                    {data.domains.filter((row) => row.status === 'active').length === 0 ? (
-                      <p className="text-xs opacity-50">还没有已授权域名。客户也可以在自己的门户里自助添加。</p>
-                    ) : (
-                      <ul className="flex flex-col gap-2">
-                        {data.domains.filter((row) => row.status === 'active').map((row) => (
-                          <li key={row.id} className="flex items-center justify-between gap-2 rounded-lg border border-black/8 p-2.5 text-xs dark:border-white/10">
-                            <div className="min-w-0">
-                              <p className="mono-code truncate">{row.domain}</p>
-                              <p className="opacity-45">
-                                {row.source === 'customer' ? '客户自助添加' : '后台添加'} · 校验 {row.verifyCount} 次 · {fromNow(row.lastSeenAt)}
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="danger-soft"
-                              onPress={async () => {
-                                if (!window.confirm('解绑域名 ' + row.domain + '？该站点会立即失效。')) return;
-                                try {
-                                  await api.delete('/api/admin/domain-licenses/domains/' + row.id);
-                                  toast.success('已解绑 ' + row.domain);
-                                  refresh();
-                                } catch (error) {
-                                  toast.danger('解绑失败', { description: error instanceof Error ? error.message : '' });
-                                }
-                              }}
-                            >
-                              解绑
-                            </Button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
+                {data.domains.filter((row) => row.status === 'active').length === 0 ? (
+                  <p className="text-xs opacity-50">还没有已授权域名。客户也可以在自己的门户里自助添加。</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {data.domains.filter((row) => row.status === 'active').map((row) => (
+                      <li key={row.id} className="flex items-center justify-between gap-2 rounded-lg border border-black/8 p-2.5 text-xs dark:border-white/10">
+                        <div className="min-w-0">
+                          <p className="mono-code truncate">{row.domain}</p>
+                          <p className="opacity-45">
+                            {row.source === 'customer' ? '客户自助添加' : '后台添加'} · 校验 {row.verifyCount} 次 · {fromNow(row.lastSeenAt)}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="bg-destructive text-white"
+                          onClick={async () => {
+                            if (!window.confirm('解绑域名 ' + row.domain + '？该站点会立即失效。')) return;
+                            try {
+                              await api.delete('/api/admin/domain-licenses/domains/' + row.id);
+                              toast.success('已解绑 ' + row.domain);
+                              refresh();
+                            } catch (error) {
+                              toast.error('解绑失败', { description: error instanceof Error ? error.message : '' });
+                            }
+                          }}
+                        >
+                          解绑
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
 
-                  <section>
-                    <h3 className="mb-2 text-sm font-medium">事件记录</h3>
-                    <ul className="flex flex-col gap-1.5">
-                      {data.events.map((event) => (
-                        <li key={event.id} className="flex items-start justify-between gap-3 text-xs">
-                          <span>
-                            <Tag color="default">{event.type}</Tag>
-                            {event.domain ? <span className="mono-code ml-2 opacity-80">{event.domain}</span> : null}
-                            {event.message ? <span className="ml-2 opacity-60">{event.message}</span> : null}
-                          </span>
-                          <span className="shrink-0 opacity-45">{formatDateTime(event.createdAt)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                </>
-              ) : null}
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+              <section>
+                <h3 className="mb-2 text-sm font-medium">事件记录</h3>
+                <ul className="flex flex-col gap-1.5">
+                  {data.events.map((event) => (
+                    <li key={event.id} className="flex items-start justify-between gap-3 text-xs">
+                      <span>
+                        <Tag color="default">{event.type}</Tag>
+                        {event.domain ? <span className="mono-code ml-2 opacity-80">{event.domain}</span> : null}
+                        {event.message ? <span className="ml-2 opacity-60">{event.message}</span> : null}
+                      </span>
+                      <span className="shrink-0 opacity-45">{formatDateTime(event.createdAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

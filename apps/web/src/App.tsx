@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { Spinner } from '@/lib/heroui-compat';
+import { Spinner } from '@/components/ui/spinner';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { useAuth, usePortalAuth } from '@/lib/auth';
 import { LoginPage } from '@/pages/LoginPage';
@@ -30,7 +30,7 @@ import { PortalDomainsPage } from '@/portal/PortalDomainsPage';
 function Splash({ label }: { label: string }) {
   return (
     <div className="grid min-h-dvh place-items-center gap-3">
-      <Spinner size="lg" />
+      <Spinner className="size-8" />
       <p className="text-sm opacity-60">{label}</p>
     </div>
   );

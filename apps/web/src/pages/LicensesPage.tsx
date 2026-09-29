@@ -1,21 +1,34 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import {
-  Button, Chip, Dropdown, Input, Label, ListBox, Modal, Select, Switch, TextArea, TextField, toast,
-} from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/animate-ui/components/radix/dialog';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/animate-ui/components/radix/dropdown-menu';
+import { Switch } from '@/components/animate-ui/components/radix/switch';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { Copy, Download, Eye, KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { LicenseDetail, LicenseRow, LicenseStats, Paginated, Plan, ProductRow } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatCard, StatusChip, Tag } from '@/components/common/ui';
+import { cn } from '@/lib/utils';
 import { daysLeft, formatDateTime, fromNow } from '@/lib/format';
 import { EVENT_LABEL, LICENSE_TYPE_LABEL, SOURCE_LABEL } from '@/lib/labels';
+
+type Key = string | number;
 
 function copy(text: string, label = '已复制') {
   void navigator.clipboard.writeText(text).then(
     () => toast.success(label),
-    () => toast.danger('复制失败，请手动选择'),
+    () => toast.error('复制失败，请手动选择'),
   );
 }
 
@@ -70,7 +83,7 @@ export function LicensesPage() {
               const res = await api.get<{ keyFormatted: string }>('/api/admin/licenses/' + row.id + '/reveal');
               copy(''.concat(res.keyFormatted), '授权码已复制到剪贴板');
             } catch (error) {
-              toast.danger('无法查看', { description: error instanceof Error ? error.message : '' });
+              toast.error('无法查看', { description: error instanceof Error ? error.message : '' });
             }
           }}
         >
@@ -117,9 +130,18 @@ export function LicensesPage() {
         return (
           <div className="flex flex-col items-end">
             <span className="text-[12px] tabular-nums">{formatDateTime(row.expiresAt)}</span>
-            <Chip color={tone} size="sm" variant="soft">
-              <Chip.Label>{days === null ? '—' : days < 0 ? '已过期' : '剩 ' + days + ' 天'}</Chip.Label>
-            </Chip>
+            <Badge
+              variant="outline"
+              className={cn(
+                tone === 'default' && 'bg-muted text-foreground',
+                tone === 'danger' && 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+                tone === 'warning' && 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+                tone === 'success' && 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+                'text-[11px] px-2 py-0.5',
+              )}
+            >
+              {days === null ? '—' : days < 0 ? '已过期' : '剩 ' + days + ' 天'}
+            </Badge>
           </div>
         );
       },
@@ -128,40 +150,41 @@ export function LicensesPage() {
       id: 'actions', label: '操作', align: 'right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" variant="ghost" onPress={() => setDetailId(row.id)}>详情</Button>
-          <Dropdown>
-            <Dropdown.Trigger
-              className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-              aria-label="更多操作"
-            >
-              更多
-            </Dropdown.Trigger>
-            <Dropdown.Popover placement="bottom end">
-              <Dropdown.Menu>
-                <Dropdown.Item id="extend" onAction={() => void extendLicense(row.id, 30, refresh)}>
-                  <RefreshCw size={13} /> 延长 30 天
-                </Dropdown.Item>
-                <Dropdown.Item id="reset" onAction={() => void resetDevices(row.id, refresh)}>
-                  <Trash2 size={13} /> 清空设备绑定
-                </Dropdown.Item>
-                <Dropdown.Item id="reissue" onAction={() => void reissue(row.id, refresh)}>
-                  <KeyRound size={13} /> 换发新授权码
-                </Dropdown.Item>
-                <Dropdown.Item
-                  id="suspend"
-                  onAction={() => void transition(row.id, row.status === 'suspended' ? 'resume' : 'suspend', refresh)}
-                >
-                  {row.status === 'suspended' ? '恢复授权' : '暂停授权'}
-                </Dropdown.Item>
-                <Dropdown.Item id="revoke" onAction={() => void revokeWithConfirm(row.id, refresh)}>
-                  <Trash2 size={13} /> 吊销授权
-                </Dropdown.Item>
-                <Dropdown.Item id="delete" onAction={() => void deleteLicense(row, refresh)}>
-                  <Trash2 size={13} /> 删除授权码
-                </Dropdown.Item>
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
+          <Button size="sm" variant="ghost" onClick={() => setDetailId(row.id)}>详情</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                aria-label="更多操作"
+              >
+                更多
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem id="extend" onSelect={() => void extendLicense(row.id, 30, refresh)}>
+                <RefreshCw size={13} /> 延长 30 天
+              </DropdownMenuItem>
+              <DropdownMenuItem id="reset" onSelect={() => void resetDevices(row.id, refresh)}>
+                <Trash2 size={13} /> 清空设备绑定
+              </DropdownMenuItem>
+              <DropdownMenuItem id="reissue" onSelect={() => void reissue(row.id, refresh)}>
+                <KeyRound size={13} /> 换发新授权码
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                id="suspend"
+                onSelect={() => void transition(row.id, row.status === 'suspended' ? 'resume' : 'suspend', refresh)}
+              >
+                {row.status === 'suspended' ? '恢复授权' : '暂停授权'}
+              </DropdownMenuItem>
+              <DropdownMenuItem id="revoke" onSelect={() => void revokeWithConfirm(row.id, refresh)}>
+                <Trash2 size={13} /> 吊销授权
+              </DropdownMenuItem>
+              <DropdownMenuItem id="delete" onSelect={() => void deleteLicense(row, refresh)}>
+                <Trash2 size={13} /> 删除授权码
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -179,7 +202,7 @@ export function LicensesPage() {
             <Button
               variant="ghost"
               size="sm"
-              onPress={() => {
+              onClick={() => {
                 // 导出走浏览器下载，带上 Authorization 头需要用 fetch + blob（window.open 无法带 Bearer）
                 void (async () => {
                   try {
@@ -203,7 +226,7 @@ export function LicensesPage() {
                     URL.revokeObjectURL(downloadUrl);
                     toast.info('导出已开始', { description: '默认不含明文授权码；需要明文请用「导出明文」' });
                   } catch (error) {
-                    toast.danger('导出失败', { description: error instanceof Error ? error.message : '' });
+                    toast.error('导出失败', { description: error instanceof Error ? error.message : '' });
                   }
                 })();
               }}
@@ -225,69 +248,64 @@ export function LicensesPage() {
 
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <div className="w-56">
-          <Select
-            name="product"
-            placeholder="全部产品"
-            selectedKey={productId}
-            onSelectionChange={(key) => { setProductId(key); setPage(1); }}
-            fullWidth
-          >
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>产品</Label>
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
+            <Select
+              name="product"
+              value={productId != null ? String(productId) : ''}
+              onValueChange={(v) => { setProductId(v); setPage(1); }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="全部产品" />
+              </SelectTrigger>
+              <SelectContent>
                 {productOptions.map((product) => (
-                  <ListBox.Item key={product.id} id={product.id} textValue={product.name}>
+                  <SelectItem key={product.id} value={String(product.id)}>
                     {product.name}
-                  </ListBox.Item>
+                  </SelectItem>
                 ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="w-40">
-          <Select
-            name="status"
-            placeholder="全部状态"
-            selectedKey={status}
-            onSelectionChange={(key) => { setStatus(key); setPage(1); }}
-            fullWidth
-          >
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>状态</Label>
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
+            <Select
+              name="status"
+              value={status != null ? String(status) : ''}
+              onValueChange={(v) => { setStatus(v); setPage(1); }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="全部状态" />
+              </SelectTrigger>
+              <SelectContent>
                 {['issued', 'active', 'expired', 'suspended', 'revoked', 'banned'].map((value) => (
-                  <ListBox.Item key={value} id={value} textValue={value}>{value}</ListBox.Item>
+                  <SelectItem key={value} value={value}>{value}</SelectItem>
                 ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="w-64">
-          <TextField name="search" value={search} onChange={(value) => { setSearch(value); setPage(1); }} fullWidth>
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>搜索</Label>
-            <Input placeholder="邮箱 / 备注 / 粘贴完整授权码" />
-          </TextField>
+            <Input
+              name="search"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="邮箱 / 备注 / 粘贴完整授权码"
+            />
+          </div>
         </div>
 
         <div className="pb-2">
-          <Switch isSelected={onlyExpiring} onChange={(value) => { setOnlyExpiring(value); setPage(1); }}>
-            <Switch.Content>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-              仅看 7 天内到期
-            </Switch.Content>
-          </Switch>
+          <div className="flex items-center gap-2">
+            <Switch checked={onlyExpiring} onCheckedChange={(value) => { setOnlyExpiring(value); setPage(1); }} />
+            <span className="text-sm">仅看 7 天内到期</span>
+          </div>
         </div>
       </div>
 
@@ -321,7 +339,7 @@ async function transition(id: string, action: 'revoke' | 'suspend' | 'resume' | 
     toast.success('状态已更新');
     refresh();
   } catch (error) {
-    toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -341,7 +359,7 @@ async function deleteLicense(row: LicenseRow, refresh: () => void) {
     toast.success('已删除 ' + row.keyMasked);
     refresh();
   } catch (error) {
-    toast.danger('删除失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('删除失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -356,7 +374,7 @@ async function extendLicense(id: string, days: number, refresh: () => void) {
     toast.success('已延长 ' + days + ' 天');
     refresh();
   } catch (error) {
-    toast.danger('延期失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('延期失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -367,7 +385,7 @@ async function resetDevices(id: string, refresh: () => void) {
     toast.success('已释放 ' + res.released + ' 台设备');
     refresh();
   } catch (error) {
-    toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -378,7 +396,7 @@ async function reissue(id: string, refresh: () => void) {
     copy(''.concat(res.keyFormatted), '新授权码已复制：' + res.keyFormatted);
     refresh();
   } catch (error) {
-    toast.danger('换发失败', { description: error instanceof Error ? error.message : '' });
+    toast.error('换发失败', { description: error instanceof Error ? error.message : '' });
   }
 }
 
@@ -417,78 +435,77 @@ function CreateLicenseModal({ products, onDone }: { products: ProductRow[]; onDo
       setEmail(''); setNotes(''); setDurationDays('');
       onDone();
     } catch (error) {
-      toast.danger('创建失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('创建失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={setOpen}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-        <Plus size={15} /> 新建授权
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable variant="blur">
-        <Modal.Container size="md" placement="center">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>新建单个授权</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              <Select name="product" placeholder="选择产品" selectedKey={productId}
-                onSelectionChange={(key) => { setProductId(key); setPlanId(null); }} isRequired fullWidth>
-                <Label>产品</Label>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {products.map((product) => (
-                      <ListBox.Item key={product.id} id={product.id} textValue={product.name}>{product.name}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <Plus size={15} /> 新建授权
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>新建单个授权</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>产品</Label>
+            <Select name="product" required value={productId != null ? String(productId) : ''}
+              onValueChange={(v) => { setProductId(v); setPlanId(null); }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="选择产品" />
+              </SelectTrigger>
+              <SelectContent>
+                {products.map((product) => (
+                  <SelectItem key={product.id} value={String(product.id)}>{product.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <Select name="plan" placeholder={productId ? '选择策略' : '请先选择产品'} selectedKey={planId}
-                onSelectionChange={setPlanId} isRequired fullWidth isDisabled={!productId}>
-                <Label>授权策略</Label>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {(plans.data ?? []).map((plan) => (
-                      <ListBox.Item key={plan.id} id={plan.id} textValue={plan.name}>
-                        {plan.name} · {LICENSE_TYPE_LABEL[plan.licenseType]}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>授权策略</Label>
+            <Select name="plan" value={planId != null ? String(planId) : ''}
+              onValueChange={(v) => setPlanId(v)} disabled={!productId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={productId ? '选择策略' : '请先选择产品'} />
+              </SelectTrigger>
+              <SelectContent>
+                {(plans.data ?? []).map((plan) => (
+                  <SelectItem key={plan.id} value={String(plan.id)}>{plan.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <TextField name="email" value={email} onChange={setEmail} fullWidth>
-                <Label>归属客户邮箱（可选）</Label>
-                <Input placeholder="buyer@example.com" />
-              </TextField>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>归属客户邮箱（可选）</Label>
+            <Input name="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="buyer@example.com" />
+          </div>
 
-              <TextField name="durationDays" value={durationDays} onChange={setDurationDays} fullWidth>
-                <Label>覆盖有效期天数（可选）</Label>
-                <Input placeholder="留空则使用策略默认值" inputMode="numeric" />
-              </TextField>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>覆盖有效期天数（可选）</Label>
+            <Input name="durationDays" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} placeholder="留空则使用策略默认值" inputMode="numeric" />
+          </div>
 
-              <TextField name="notes" value={notes} onChange={setNotes} fullWidth>
-                <Label>备注</Label>
-                <TextArea rows={2} placeholder="订单号 / 渠道 / 特殊说明" />
-              </TextField>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-              <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !productId || !planId}>
-                {busy ? '创建中…' : '创建并复制授权码'}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>备注</Label>
+            <Textarea name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="订单号 / 渠道 / 特殊说明" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+          <Button variant="default" className="bg-primary text-primary-foreground" onClick={() => void submit()} disabled={busy || !productId || !planId}>
+            {busy ? '创建中…' : '创建并复制授权码'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -518,106 +535,107 @@ function BatchCreateModal({ products, onDone }: { products: ProductRow[]; onDone
       toast.success('已生成 ' + res.created + ' 条授权');
       onDone();
     } catch (error) {
-      toast.danger('批量生成失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('批量生成失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={(next) => { setOpen(next); if (!next) setResult(null); }}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5">
-        <KeyRound size={15} /> 批量发码
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable={!result} variant="blur">
-        <Modal.Container size="lg" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>{result ? '批量发码结果' : '批量发码'}</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              {result ? (
-                <>
-                  <p className="text-sm">
-                    已生成 <strong>{result.keys.length}</strong> 条授权，批次 <code>{result.batchLabel}</code>。
-                    明文仅此一次展示，请立即导出保存。
-                  </p>
-                  <TextArea readOnly rows={10} value={result.keys.join('\n')} className="mono-code text-xs" />
-                  <div className="flex gap-2">
-                    <Button variant="primary" size="sm" onPress={() => copy(result.keys.join('\n'), '已复制全部授权码')}>
-                      <Copy size={14} /> 复制全部
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onPress={() => {
-                        const blob = new Blob([result.keys.join('\n')], { type: 'text/plain;charset=utf-8' });
-                        const url = URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = 'licenses-' + (result.batchLabel ?? 'batch') + '.txt';
-                        link.click();
-                        URL.revokeObjectURL(url);
-                      }}
-                    >
-                      <Download size={14} /> 下载 TXT
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Select name="product" placeholder="选择产品" selectedKey={productId}
-                    onSelectionChange={(key) => { setProductId(key); setPlanId(null); }} fullWidth>
-                    <Label>产品</Label>
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {products.map((product) => (
-                          <ListBox.Item key={product.id} id={product.id} textValue={product.name}>{product.name}</ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-
-                  <Select name="plan" placeholder="选择策略" selectedKey={planId} onSelectionChange={setPlanId}
-                    fullWidth isDisabled={!productId}>
-                    <Label>授权策略</Label>
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {(plans.data ?? []).map((plan) => (
-                          <ListBox.Item key={plan.id} id={plan.id} textValue={plan.name}>{plan.name}</ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <TextField name="count" value={count} onChange={setCount} isRequired fullWidth>
-                      <Label>数量（最多 5000）</Label>
-                      <Input inputMode="numeric" />
-                    </TextField>
-                    <TextField name="label" value={label} onChange={setLabel} fullWidth>
-                      <Label>批次名（可选）</Label>
-                      <Input placeholder="taobao-2026-09" />
-                    </TextField>
-                  </div>
-                </>
-              )}
-            </Modal.Body>
-            {result ? null : (
-              <Modal.Footer>
-                <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-                <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !productId || !planId}>
-                  {busy ? '生成中…' : '生成'}
+    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setResult(null); }}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5">
+          <KeyRound size={15} /> 批量发码
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{result ? '批量发码结果' : '批量发码'}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          {result ? (
+            <>
+              <p className="text-sm">
+                已生成 <strong>{result.keys.length}</strong> 条授权，批次 <code>{result.batchLabel}</code>。
+                明文仅此一次展示，请立即导出保存。
+              </p>
+              <Textarea readOnly rows={10} value={result.keys.join('\n')} className="mono-code text-xs" />
+              <div className="flex gap-2">
+                <Button variant="default" className="bg-primary text-primary-foreground" size="sm" onClick={() => copy(result.keys.join('\n'), '已复制全部授权码')}>
+                  <Copy size={14} /> 复制全部
                 </Button>
-              </Modal.Footer>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const blob = new Blob([result.keys.join('\n')], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'licenses-' + (result.batchLabel ?? 'batch') + '.txt';
+                    link.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  <Download size={14} /> 下载 TXT
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>产品</Label>
+                <Select name="product" value={productId != null ? String(productId) : ''}
+                  onValueChange={(v) => { setProductId(v); setPlanId(null); }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="选择产品" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={String(product.id)}>{product.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>授权策略</Label>
+                <Select name="plan" value={planId != null ? String(planId) : ''}
+                  onValueChange={(v) => setPlanId(v)} disabled={!productId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="选择策略" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(plans.data ?? []).map((plan) => (
+                      <SelectItem key={plan.id} value={String(plan.id)}>{plan.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label>数量（最多 5000）</Label>
+                  <Input name="count" value={count} onChange={(e) => setCount(e.target.value)} inputMode="numeric" required />
+                </div>
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label>批次名（可选）</Label>
+                  <Input name="label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="taobao-2026-09" />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {result ? null : (
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+            <Button variant="default" className="bg-primary text-primary-foreground" onClick={() => void submit()} disabled={busy || !productId || !planId}>
+              {busy ? '生成中…' : '生成'}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -631,80 +649,75 @@ function LicenseDetailModal({ id, onClose, onChanged }: { id: string | null; onC
   });
 
   return (
-    <Modal isOpen={Boolean(id)} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <Modal.Backdrop isDismissable variant="blur">
-        <Modal.Container size="lg" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>授权详情</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              {detail.isLoading ? <p className="text-sm opacity-60">加载中…</p> : null}
-              {detail.data ? (
-                <>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                    <Field label="授权码" value={<span className="mono-code">{detail.data.keyMasked}</span>} />
-                    <Field label="状态" value={<StatusChip status={detail.data.status} />} />
-                    <Field label="产品" value={detail.data.productName} />
-                    <Field label="策略" value={detail.data.planName + '（' + detail.data.planCode + '）'} />
-                    <Field label="归属" value={detail.data.customerEmail ?? '未绑定'} />
-                    <Field label="来源" value={SOURCE_LABEL[detail.data.source] ?? detail.data.source} />
-                    <Field label="设备" value={detail.data.activationCount + ' / ' + (detail.data.maxDevices || '不限')} />
-                    <Field label="到期" value={detail.data.expiresAt ? formatDateTime(detail.data.expiresAt) : '永久'} />
-                    <Field label="最近心跳" value={fromNow(detail.data.lastVerifiedAt)} />
-                    <Field label="备注" value={detail.data.notes ?? '—'} />
-                  </div>
+    <Dialog open={Boolean(id)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>授权详情</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          {detail.isLoading ? <p className="text-sm opacity-60">加载中…</p> : null}
+          {detail.data ? (
+            <>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <Field label="授权码" value={<span className="mono-code">{detail.data.keyMasked}</span>} />
+                <Field label="状态" value={<StatusChip status={detail.data.status} />} />
+                <Field label="产品" value={detail.data.productName} />
+                <Field label="策略" value={detail.data.planName + '（' + detail.data.planCode + '）'} />
+                <Field label="归属" value={detail.data.customerEmail ?? '未绑定'} />
+                <Field label="来源" value={SOURCE_LABEL[detail.data.source] ?? detail.data.source} />
+                <Field label="设备" value={detail.data.activationCount + ' / ' + (detail.data.maxDevices || '不限')} />
+                <Field label="到期" value={detail.data.expiresAt ? formatDateTime(detail.data.expiresAt) : '永久'} />
+                <Field label="最近心跳" value={fromNow(detail.data.lastVerifiedAt)} />
+                <Field label="备注" value={detail.data.notes ?? '—'} />
+              </div>
 
-                  <div className="flex flex-wrap gap-1">
-                    {detail.data.featureKeys.length === 0
-                      ? <span className="text-xs opacity-50">无功能点</span>
-                      : detail.data.featureKeys.map((key) => <Tag key={key} color="accent">{key}</Tag>)}
-                  </div>
+              <div className="flex flex-wrap gap-1">
+                {detail.data.featureKeys.length === 0
+                  ? <span className="text-xs opacity-50">无功能点</span>
+                  : detail.data.featureKeys.map((key) => <Tag key={key} color="accent">{key}</Tag>)}
+              </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onPress={async () => {
-                        try {
-                          const res = await api.get<{ keyFormatted: string }>('/api/admin/licenses/' + id + '/reveal');
-                          copy(''.concat(res.keyFormatted), '授权码已复制');
-                        } catch (error) {
-                          toast.danger('无法查看', { description: error instanceof Error ? error.message : '' });
-                        }
-                      }}
-                    >
-                      <Eye size={14} /> 查看并复制明文
-                    </Button>
-                    <Button size="sm" variant="ghost" onPress={() => void extendLicense(String(id), 30, () => { void detail.refetch(); onChanged(); })}>
-                      <RefreshCw size={14} /> 延长 30 天
-                    </Button>
-                  </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    try {
+                      const res = await api.get<{ keyFormatted: string }>('/api/admin/licenses/' + id + '/reveal');
+                      copy(''.concat(res.keyFormatted), '授权码已复制');
+                    } catch (error) {
+                      toast.error('无法查看', { description: error instanceof Error ? error.message : '' });
+                    }
+                  }}
+                >
+                  <Eye size={14} /> 查看并复制明文
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void extendLicense(String(id), 30, () => { void detail.refetch(); onChanged(); })}>
+                  <RefreshCw size={14} /> 延长 30 天
+                </Button>
+              </div>
 
-                  <section>
-                    <h3 className="mb-2 text-sm font-medium">生命周期事件</h3>
-                    <ul className="flex flex-col gap-1.5">
-                      {detail.data.events.map((event) => (
-                        <li key={event.id} className="flex items-start justify-between gap-3 text-xs">
-                          <span>
-                            <Tag color="default">{EVENT_LABEL[event.type] ?? event.type}</Tag>
-                            {event.message ? <span className="ml-2 opacity-70">{event.message}</span> : null}
-                          </span>
-                          <span className="shrink-0 opacity-45">
-                            {event.actorLabel ?? event.actorType} · {formatDateTime(event.createdAt)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                </>
-              ) : null}
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+              <section>
+                <h3 className="mb-2 text-sm font-medium">生命周期事件</h3>
+                <ul className="flex flex-col gap-1.5">
+                  {detail.data.events.map((event) => (
+                    <li key={event.id} className="flex items-start justify-between gap-3 text-xs">
+                      <span>
+                        <Tag color="default">{EVENT_LABEL[event.type] ?? event.type}</Tag>
+                        {event.message ? <span className="ml-2 opacity-70">{event.message}</span> : null}
+                      </span>
+                      <span className="shrink-0 opacity-45">
+                        {event.actorLabel ?? event.actorType} · {formatDateTime(event.createdAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

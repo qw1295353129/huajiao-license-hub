@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, Chip, Separator } from '@/lib/heroui-compat';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis,
 } from 'recharts';
@@ -85,11 +87,11 @@ export function DashboardPage() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <Card.Header>
-            <Card.Title>近 30 天趋势</Card.Title>
-            <Card.Description>激活、心跳校验与新增授权</Card.Description>
-          </Card.Header>
-          <Card.Content>
+          <CardHeader>
+            <CardTitle>近 30 天趋势</CardTitle>
+            <CardDescription>激活、心跳校验与新增授权</CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={timeseries} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
@@ -120,15 +122,15 @@ export function DashboardPage() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </Card.Content>
+          </CardContent>
         </Card>
 
         <Card>
-          <Card.Header>
-            <Card.Title>最近操作</Card.Title>
-            <Card.Description>来自审计日志</Card.Description>
-          </Card.Header>
-          <Card.Content>
+          <CardHeader>
+            <CardTitle>最近操作</CardTitle>
+            <CardDescription>来自审计日志</CardDescription>
+          </CardHeader>
+          <CardContent>
             {data.recentEvents.length === 0 ? (
               <p className="py-6 text-center text-xs opacity-45">暂无操作记录</p>
             ) : (
@@ -150,14 +152,14 @@ export function DashboardPage() {
                 {data.expiringSoon.slice(0, 5).map((item) => (
                   <li key={item.id} className="flex items-center justify-between gap-2 text-xs">
                     <span className="mono-code truncate">{item.keyMasked}</span>
-                    <Chip color="warning" size="sm" variant="soft">
-                      <Chip.Label>{item.expiresAt.slice(0, 10)}</Chip.Label>
-                    </Chip>
+                    <Badge variant="outline" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[11px] px-2 py-0.5">
+                      {item.expiresAt.slice(0, 10)}
+                    </Badge>
                   </li>
                 ))}
               </ul>
             )}
-          </Card.Content>
+          </CardContent>
         </Card>
       </div>
     </div>

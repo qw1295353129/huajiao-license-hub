@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, Separator } from '@/lib/heroui-compat';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { portalApi } from '@/lib/api';
 import { ErrorNotice, Loading, PageHeader, StatusChip } from '@/components/common/ui';
 import { formatDateTime, formatMoney } from '@/lib/format';
@@ -31,10 +32,10 @@ export function PortalOrdersPage() {
     <div className="animate-fade-in">
       <PageHeader title="我的订单" description="订单支付后系统会自动发码" />
       {items.length === 0 ? (
-        <Card><Card.Content><p className="py-8 text-center text-sm opacity-60">还没有订单</p></Card.Content></Card>
+        <Card><CardContent><p className="py-8 text-center text-sm opacity-60">还没有订单</p></CardContent></Card>
       ) : (
         <Card>
-          <Card.Content>
+          <CardContent>
             <ul className="flex flex-col">
               {items.map((order, index) => (
                 <li key={order.id}>
@@ -55,7 +56,7 @@ export function PortalOrdersPage() {
                 </li>
               ))}
             </ul>
-          </Card.Content>
+          </CardContent>
         </Card>
       )}
     </div>

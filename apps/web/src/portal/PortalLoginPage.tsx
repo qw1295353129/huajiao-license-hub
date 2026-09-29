@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Button, Card, FieldError, Input, Label, TextField, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { ShieldCheck } from 'lucide-react';
 import { ApiError, portalApi } from '@/lib/api';
 import { usePortalAuth } from '@/lib/auth';
@@ -59,7 +63,7 @@ export function PortalLoginPage() {
         </div>
 
         <Card>
-          <Card.Content>
+          <CardContent>
             <div className="mb-4 flex gap-1 rounded-lg bg-black/5 p-1 text-xs dark:bg-white/5">
               {(['login', 'register'] as const).map((item) => (
                 <button
@@ -77,24 +81,35 @@ export function PortalLoginPage() {
             </div>
 
             <form onSubmit={submit} className="flex flex-col gap-4">
-              <TextField name="email" type="email" value={email} onChange={setEmail} isRequired fullWidth>
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label>邮箱</Label>
-                <Input autoComplete="username" autoFocus />
-              </TextField>
+                <Input
+                  name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="username" autoFocus required
+                />
+              </div>
 
               {mode === 'register' ? (
-                <TextField name="name" value={name} onChange={setName} fullWidth>
+                <div className="flex flex-col gap-1.5 w-full">
                   <Label>昵称（可选）</Label>
-                  <Input placeholder="怎么称呼你" />
-                </TextField>
+                  <Input
+                    name="name" value={name} onChange={(e) => setName(e.target.value)}
+                    placeholder="怎么称呼你"
+                  />
+                </div>
               ) : null}
 
               {mode !== 'forgot' ? (
-                <TextField name="password" type="password" value={password} onChange={setPassword} isRequired fullWidth isInvalid={Boolean(error)}>
+                <div className="flex flex-col gap-1.5 w-full">
                   <Label>密码</Label>
-                  <Input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
-                  <FieldError>{error ?? ''}</FieldError>
-                </TextField>
+                  <Input
+                    name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    required aria-invalid={Boolean(error) || undefined}
+                    className={error ? 'border-destructive' : undefined}
+                  />
+                  {error ? <p className="text-xs text-destructive">{error}</p> : null}
+                </div>
               ) : null}
 
               {error && mode === 'forgot' ? (
@@ -107,7 +122,7 @@ export function PortalLoginPage() {
                 </a>
               ) : null}
 
-              <Button type="submit" variant="primary" fullWidth isDisabled={busy}>
+              <Button type="submit" variant="default" className="bg-primary text-primary-foreground w-full" disabled={busy}>
                 {busy ? '处理中…' : mode === 'login' ? '登录' : mode === 'register' ? '注册并登录' : '发送重置链接'}
               </Button>
 
@@ -119,7 +134,7 @@ export function PortalLoginPage() {
                 {mode === 'forgot' ? '返回登录' : '忘记密码？'}
               </button>
             </form>
-          </Card.Content>
+          </CardContent>
         </Card>
       </div>
     </div>

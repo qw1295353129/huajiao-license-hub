@@ -1,15 +1,24 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import {
-  Button, Input, Label, ListBox, Modal, Select, TextArea, TextField, toast,
-} from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/animate-ui/components/radix/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { Copy, Download, Plus, Ticket, Trash2 } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { Paginated, Plan, ProductRow } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatusChip, StatCard } from '@/components/common/ui';
 import { formatDateTime } from '@/lib/format';
+
+type Key = string | number;
 
 interface BatchRow {
   id: string;
@@ -96,11 +105,11 @@ export function RedeemPage() {
       id: 'actions', label: '操作', align: 'right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1">
-          <Button size="sm" variant="ghost" onPress={() => { setSelectedBatch(row.id); setCodesPage(1); }}>查看卡密</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setSelectedBatch(row.id); setCodesPage(1); }}>查看卡密</Button>
           <Button
             size="sm"
             variant="ghost"
-            onPress={() => {
+            onClick={() => {
               // 导出走浏览器下载，带上 Authorization 头需要用 fetch + blob
               void (async () => {
                 try {
@@ -118,7 +127,7 @@ export function RedeemPage() {
                   URL.revokeObjectURL(url);
                   toast.success('导出已开始（含明文卡密，请妥善保管）');
                 } catch (error) {
-                  toast.danger('导出失败', { description: error instanceof Error ? error.message : '' });
+                  toast.error('导出失败', { description: error instanceof Error ? error.message : '' });
                 }
               })();
             }}
@@ -127,15 +136,16 @@ export function RedeemPage() {
           </Button>
           <Button
             size="sm"
-            variant="danger-soft"
-            onPress={async () => {
+            variant="destructive"
+            className="bg-destructive text-white"
+            onClick={async () => {
               if (!window.confirm('作废批次「' + row.name + '」中所有未使用的卡密？已兑换的不受影响。')) return;
               try {
                 const res = await api.delete<{ voided: number }>('/api/admin/redeem/batches/' + row.id);
                 toast.success('已作废 ' + res.voided + ' 张未使用卡密');
                 refresh();
               } catch (error) {
-                toast.danger('作废失败', { description: error instanceof Error ? error.message : '' });
+                toast.error('作废失败', { description: error instanceof Error ? error.message : '' });
               }
             }}
           >
@@ -155,15 +165,16 @@ export function RedeemPage() {
       render: (row) => row.status === 'unused' ? (
         <Button
           size="sm"
-          variant="danger-soft"
-          onPress={async () => {
+          variant="destructive"
+          className="bg-destructive text-white"
+          onClick={async () => {
             if (!window.confirm('作废这张卡密？')) return;
             try {
               await api.post('/api/admin/redeem/codes/' + row.id + '/void', {});
               toast.success('已作废');
               refresh();
             } catch (error) {
-              toast.danger('作废失败', { description: error instanceof Error ? error.message : '' });
+              toast.error('作废失败', { description: error instanceof Error ? error.message : '' });
             }
           }}
         >
@@ -205,31 +216,26 @@ export function RedeemPage() {
         }
       />
 
-      <Modal isOpen={Boolean(selectedBatch)} onOpenChange={(open) => { if (!open) setSelectedBatch(null); }}>
-        <Modal.Backdrop isDismissable variant="blur">
-          <Modal.Container size="lg" placement="center" scroll="inside">
-            <Modal.Dialog>
-              <Modal.Header>
-                <Modal.Heading>批次卡密</Modal.Heading>
-                <Modal.CloseTrigger />
-              </Modal.Header>
-              <Modal.Body>
-                <DataTable
-                  ariaLabel="卡密列表"
-                  columns={codeColumns}
-                  items={codes.data?.items ?? []}
-                  isLoading={codes.isLoading}
-                  emptyTitle="暂无卡密"
-                  footer={
-                    <Pagination page={codesPage} pageSize={20} total={codes.data?.total ?? 0}
-                      onChange={(nextPage) => setCodesPage(nextPage)} />
-                  }
-                />
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <Dialog open={Boolean(selectedBatch)} onOpenChange={(open) => { if (!open) setSelectedBatch(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>批次卡密</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <DataTable
+              ariaLabel="卡密列表"
+              columns={codeColumns}
+              items={codes.data?.items ?? []}
+              isLoading={codes.isLoading}
+              emptyTitle="暂无卡密"
+              footer={
+                <Pagination page={codesPage} pageSize={20} total={codes.data?.total ?? 0}
+                  onChange={(nextPage) => setCodesPage(nextPage)} />
+              }
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -264,117 +270,115 @@ function CreateBatchModal({ products, onDone }: { products: ProductRow[]; onDone
       toast.success('已生成 ' + res.codes.length + ' 张卡密');
       onDone();
     } catch (error) {
-      toast.danger('生成失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('生成失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={(next) => { setOpen(next); if (!next) setResult(null); }}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-        <Plus size={15} /> 生成卡密
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable={!result} variant="blur">
-        <Modal.Container size="lg" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>{result ? '卡密已生成' : '生成卡密批次'}</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              {result ? (
-                <>
-                  <p className="text-sm">
-                    批次 <strong>{result.batchName}</strong> 共 <strong>{result.codes.length}</strong> 张。
-                    <span className="text-rose-500">明文仅此一次展示</span>，关闭后只能导出 CSV 获取。
-                  </p>
-                  <TextArea readOnly rows={10} value={result.codes.join('\n')} className="mono-code text-xs" />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onPress={() => {
-                        void navigator.clipboard.writeText(result.codes.join('\n'));
-                        toast.success('已复制全部卡密');
-                      }}
-                    >
-                      <Copy size={14} /> 复制全部
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onPress={() => {
-                        const blob = new Blob([result.codes.join('\n')], { type: 'text/plain;charset=utf-8' });
-                        const url = URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = 'redeem-' + result.batchName + '.txt';
-                        link.click();
-                        URL.revokeObjectURL(url);
-                      }}
-                    >
-                      <Download size={14} /> 下载 TXT
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <TextField name="name" value={name} onChange={setName} fullWidth>
-                    <Label>批次名称</Label>
-                    <Input placeholder="taobao-2026-09" />
-                  </TextField>
-
-                  <Select name="product" placeholder="选择产品" selectedKey={productId}
-                    onSelectionChange={(key) => { setProductId(key); setPlanId(null); }} fullWidth>
-                    <Label>产品</Label>
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {products.map((product) => (
-                          <ListBox.Item key={product.id} id={product.id} textValue={product.name}>{product.name}</ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-
-                  <Select name="plan" placeholder="选择策略" selectedKey={planId} onSelectionChange={setPlanId}
-                    fullWidth isDisabled={!productId}>
-                    <Label>兑换后发放的策略</Label>
-                    <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {(plans.data ?? []).map((plan) => (
-                          <ListBox.Item key={plan.id} id={plan.id} textValue={plan.name}>{plan.name}</ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <TextField name="quantity" value={quantity} onChange={setQuantity} isRequired fullWidth>
-                      <Label>数量（最多 5000）</Label>
-                      <Input inputMode="numeric" />
-                    </TextField>
-                    <TextField name="channel" value={channel} onChange={setChannel} fullWidth>
-                      <Label>渠道（便于对账）</Label>
-                      <Input placeholder="taobao / xianyu / faka" />
-                    </TextField>
-                  </div>
-                </>
-              )}
-            </Modal.Body>
-            {result ? null : (
-              <Modal.Footer>
-                <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-                <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !productId || !planId}>
-                  {busy ? '生成中…' : '生成卡密'}
+    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setResult(null); }}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <Plus size={15} /> 生成卡密
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{result ? '卡密已生成' : '生成卡密批次'}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          {result ? (
+            <>
+              <p className="text-sm">
+                批次 <strong>{result.batchName}</strong> 共 <strong>{result.codes.length}</strong> 张。
+                <span className="text-rose-500">明文仅此一次展示</span>，关闭后只能导出 CSV 获取。
+              </p>
+              <Textarea readOnly rows={10} value={result.codes.join('\n')} className="mono-code text-xs" />
+              <div className="flex gap-2">
+                <Button
+                  variant="default"
+                  className="bg-primary text-primary-foreground"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(result.codes.join('\n'));
+                    toast.success('已复制全部卡密');
+                  }}
+                >
+                  <Copy size={14} /> 复制全部
                 </Button>
-              </Modal.Footer>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const blob = new Blob([result.codes.join('\n')], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'redeem-' + result.batchName + '.txt';
+                    link.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  <Download size={14} /> 下载 TXT
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>批次名称</Label>
+                <Input name="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="taobao-2026-09" />
+              </div>
+
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>产品</Label>
+                <Select name="product" value={productId != null ? String(productId) : ''}
+                  onValueChange={(key) => { setProductId(key); setPlanId(null); }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="选择产品" /></SelectTrigger>
+                  <SelectContent>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={String(product.id)}>{product.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1.5 w-full">
+                <Label>兑换后发放的策略</Label>
+                <Select name="plan" value={planId != null ? String(planId) : ''}
+                  onValueChange={setPlanId} disabled={!productId}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="选择策略" /></SelectTrigger>
+                  <SelectContent>
+                    {(plans.data ?? []).map((plan) => (
+                      <SelectItem key={plan.id} value={String(plan.id)}>{plan.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label>数量（最多 5000）</Label>
+                  <Input name="quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} required inputMode="numeric" />
+                </div>
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label>渠道（便于对账）</Label>
+                  <Input name="channel" value={channel} onChange={(e) => setChannel(e.target.value)} placeholder="taobao / xianyu / faka" />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {result ? null : (
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+            <Button variant="default" className="bg-primary text-primary-foreground" onClick={() => void submit()} disabled={busy || !productId || !planId}>
+              {busy ? '生成中…' : '生成卡密'}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -12,6 +12,14 @@ import { useControlledState } from "@/hooks/use-controlled-state"
 
 const SelectOpenContext = React.createContext<boolean>(false)
 
+/**
+ * 已选文本登记表：SelectContent 会随开合卸载（AnimatePresence），
+ * Radix 的 Select.Value 靠弹层里的 ItemText 提供文本，弹层一卸载就显示为空 ——
+ * 这里由 SelectItem 把「value → 文本」登记到 Select，SelectValue 在弹层卸载后照常显示。
+ */
+type SelectState = { value?: string; labels: Map<string, React.ReactNode> }
+const SelectStateContext = React.createContext<SelectState | null>(null)
+
 function Select({
   open,
   defaultOpen,
@@ -23,16 +31,23 @@ function Select({
     defaultValue: defaultOpen ?? false,
     onChange: onOpenChange,
   })
+  const labelsRef = React.useRef(new Map<string, React.ReactNode>())
+  const state = React.useMemo<SelectState>(
+    () => ({ value: props.value, labels: labelsRef.current }),
+    [props.value],
+  )
 
   return (
-    <SelectOpenContext.Provider value={isOpen}>
-      <SelectPrimitive.Root
-        data-slot="select"
-        {...props}
-        open={isOpen}
-        onOpenChange={setIsOpen}
-      />
-    </SelectOpenContext.Provider>
+    <SelectStateContext.Provider value={state}>
+      <SelectOpenContext.Provider value={isOpen}>
+        <SelectPrimitive.Root
+          data-slot="select"
+          {...props}
+          open={isOpen}
+          onOpenChange={setIsOpen}
+        />
+      </SelectOpenContext.Provider>
+    </SelectStateContext.Provider>
   )
 }
 
@@ -50,9 +65,15 @@ function SelectGroup({
 }
 
 function SelectValue({
+  children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Value>) {
-  return <SelectPrimitive.Value data-slot="select-value" {...props} />
+  const state = React.useContext(SelectStateContext)
+  // 弹层卸载后 Radix 取不到已选文本，用登记表兜底；children 优先（显式指定时）
+  const fallback =
+    children ??
+    (state?.value ? state.labels.get(state.value) : undefined)
+  return <SelectPrimitive.Value data-slot="select-value" {...props}>{fallback}</SelectPrimitive.Value>
 }
 
 function SelectTrigger({
@@ -181,13 +202,20 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  value,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Item>) {
   const reduceMotion = useReducedMotion()
+  const state = React.useContext(SelectStateContext)
+  // 登记「value → 文本」；不清理：弹层卸载后仍要能显示已选文本
+  React.useEffect(() => {
+    if (state && value !== undefined) state.labels.set(value, children)
+  })
 
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      value={value}
       className={cn(
         "relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none transition-colors duration-150 ease-out focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className

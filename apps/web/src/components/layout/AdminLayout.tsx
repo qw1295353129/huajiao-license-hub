@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/animate-ui/components/buttons/button';
 import {
-  Avatar, Button, Dropdown, Separator, Tooltip,
-} from '@/lib/heroui-compat';
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/animate-ui/components/radix/dropdown-menu';
+import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip, TooltipTrigger, TooltipContent,
+} from '@/components/animate-ui/components/animate/tooltip';
 import {
   BarChart3, Boxes, FileClock, Globe, KeyRound, KeySquare, LayoutDashboard, LogOut, Menu, Receipt, Settings,
   ShieldCheck, Ticket, Users, Webhook, X,
@@ -128,41 +133,40 @@ export function AdminLayout() {
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200/70 bg-white/70 px-4 backdrop-blur">
           <div className="flex items-center gap-2">
             <Button
-              isIconOnly
               variant="ghost"
               size="sm"
               aria-label="打开菜单"
-              className="lg:hidden"
-              onPress={() => setMobileOpen(true)}
+              className="px-0 lg:hidden"
+              onClick={() => setMobileOpen(true)}
             >
               <Menu size={16} />
             </Button>
             <span className="text-sm opacity-50">个人运营控制台</span>
           </div>
-          <Dropdown>
-            {/* Dropdown.Trigger 自身就是 <button>，再套 <Button> 会产生非法嵌套（浏览器会警告 + 行为异常） */}
-            <Dropdown.Trigger className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/8">
-              <Avatar className="size-6">
-                <Avatar.Fallback>{(user?.name ?? 'A').slice(0, 1)}</Avatar.Fallback>
-              </Avatar>
-              <span className="hidden sm:inline">{user?.name ?? '未登录'}</span>
-            </Dropdown.Trigger>
-            <Dropdown.Popover placement="bottom end">
-              <Dropdown.Menu>
-                <Dropdown.Item id="role" isDisabled>
-                  {user?.email} · {user?.role}
-                </Dropdown.Item>
-                <Dropdown.Section>
-                  <Dropdown.Item id="security" onAction={() => navigate('/admin/settings')}>
-                    <Settings size={14} /> 安全设置
-                  </Dropdown.Item>
-                  <Dropdown.Item id="logout" onAction={() => void handleLogout()}>
-                    <LogOut size={14} /> 退出登录
-                  </Dropdown.Item>
-                </Dropdown.Section>
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
+          <DropdownMenu>
+            {/* DropdownMenuTrigger 自身就是 <button>，再套 <Button> 会产生非法嵌套（浏览器会警告 + 行为异常） */}
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/8">
+                <div className="relative flex size-6 shrink-0 overflow-hidden rounded-full">
+                  <div className="flex size-full items-center justify-center rounded-full bg-muted text-sm font-medium">
+                    {(user?.name ?? 'A').slice(0, 1)}
+                  </div>
+                </div>
+                <span className="hidden sm:inline">{user?.name ?? '未登录'}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled>
+                {user?.email} · {user?.role}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/admin/settings')}>
+                <Settings size={14} /> 安全设置
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void handleLogout()}>
+                <LogOut size={14} /> 退出登录
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
         <main className="min-w-0 flex-1 overflow-y-auto p-4 lg:p-6">
@@ -180,8 +184,8 @@ export function AdminLayout() {
 export function TooltipHint({ children, label }: { children: React.ReactNode; label: string }) {
   return (
     <Tooltip>
-      <Tooltip.Trigger>{children}</Tooltip.Trigger>
-      <Tooltip.Content>{label}</Tooltip.Content>
+      <TooltipTrigger>{children}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
 }

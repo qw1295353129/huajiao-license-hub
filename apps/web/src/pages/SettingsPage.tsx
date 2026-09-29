@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button, Card, Chip, Input, Label, Separator, Switch, TextField, toast,
-} from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Switch } from '@/components/animate-ui/components/radix/switch';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 import { Copy, KeyRound, RefreshCw, ShieldCheck, ShieldOff, KeyRoundIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { ErrorNotice, Loading, PageHeader, Tag } from '@/components/common/ui';
+import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
 
 interface SiteSettings {
@@ -49,7 +55,7 @@ export function SettingsPage() {
       toast.success('设置已保存');
       void queryClient.invalidateQueries({ queryKey: ['settings'] });
     } catch (error) {
-      toast.danger('保存失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('保存失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
@@ -63,72 +69,67 @@ export function SettingsPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <Card.Header>
-            <Card.Title>站点设置</Card.Title>
-            <Card.Description>影响门户展示与默认策略</Card.Description>
-          </Card.Header>
-          <Card.Content>
+          <CardHeader>
+            <CardTitle>站点设置</CardTitle>
+            <CardDescription>影响门户展示与默认策略</CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="flex flex-col gap-4">
-              <TextField name="siteName" value={form.siteName} onChange={(value) => setForm({ ...form, siteName: value })} fullWidth>
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label>站点名称</Label>
-                <Input placeholder="LicenseHub" />
-              </TextField>
-
-              <div className="grid grid-cols-2 gap-3">
-                <TextField name="trialDays" value={String(form.trialDays)}
-                  onChange={(value) => setForm({ ...form, trialDays: Number(value) || 0 })} fullWidth>
-                  <Label>默认试用天数</Label>
-                  <Input inputMode="numeric" />
-                </TextField>
-                <TextField name="selfUnbind" value={String(form.selfUnbindPer30d)}
-                  onChange={(value) => setForm({ ...form, selfUnbindPer30d: Number(value) || 0 })} fullWidth>
-                  <Label>自助解绑次数 / 30 天</Label>
-                  <Input inputMode="numeric" />
-                </TextField>
+                <Input name="siteName" value={form.siteName} onChange={(e) => setForm({ ...form, siteName: e.target.value })} placeholder="LicenseHub" />
               </div>
 
-              <TextField name="reminder" value={form.expireReminderDays.join(',')}
-                onChange={(value) => setForm({
-                  ...form,
-                  expireReminderDays: value.split(',').map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item > 0),
-                })} fullWidth>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label>默认试用天数</Label>
+                  <Input name="trialDays" value={String(form.trialDays)}
+                    onChange={(e) => setForm({ ...form, trialDays: Number(e.target.value) || 0 })} inputMode="numeric" />
+                </div>
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label>自助解绑次数 / 30 天</Label>
+                  <Input name="selfUnbind" value={String(form.selfUnbindPer30d)}
+                    onChange={(e) => setForm({ ...form, selfUnbindPer30d: Number(e.target.value) || 0 })} inputMode="numeric" />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 w-full">
                 <Label>到期提醒（提前天数，逗号分隔）</Label>
-                <Input placeholder="7,3,1" />
-              </TextField>
+                <Input name="reminder" value={form.expireReminderDays.join(',')}
+                  onChange={(e) => setForm({
+                    ...form,
+                    expireReminderDays: e.target.value.split(',').map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item > 0),
+                  })} placeholder="7,3,1" />
+              </div>
 
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm">开放自助注册</p>
                   <p className="text-[11px] opacity-55">关闭后只能由管理员创建客户账号</p>
                 </div>
-                <Switch isSelected={form.allowRegistration} onChange={(value) => setForm({ ...form, allowRegistration: value })}>
-                  <Switch.Content>
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                    {form.allowRegistration ? '允许' : '关闭'}
-                  </Switch.Content>
-                </Switch>
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.allowRegistration} onCheckedChange={(value) => setForm({ ...form, allowRegistration: value })} />
+                  <span className="text-sm">{form.allowRegistration ? '允许' : '关闭'}</span>
+                </div>
               </div>
 
-              <Button variant="primary" size="sm" onPress={() => void save()} isDisabled={busy}>
+              <Button variant="default" className="bg-primary text-primary-foreground" size="sm" onClick={() => void save()} disabled={busy}>
                 {busy ? '保存中…' : '保存设置'}
               </Button>
             </div>
-          </Card.Content>
+          </CardContent>
         </Card>
-
         <Card>
-          <Card.Header>
-            <Card.Title>授权签名密钥（Ed25519）</Card.Title>
-            <Card.Description>客户端内置公钥即可离线验签；轮换后旧公钥仍能验证历史授权文件</Card.Description>
-          </Card.Header>
-          <Card.Content>
+          <CardHeader>
+            <CardTitle>授权签名密钥（Ed25519）</CardTitle>
+            <CardDescription>客户端内置公钥即可离线验签；轮换后旧公钥仍能验证历史授权文件</CardDescription>
+          </CardHeader>
+          <CardContent>
             {keys.isLoading ? <p className="text-sm opacity-60">加载中…</p> : null}
             {activeKey ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <Chip color="success" size="sm" variant="soft"><Chip.Label>当前签发密钥</Chip.Label></Chip>
+                  <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] px-2 py-0.5">当前签发密钥</Badge>
                   <span className="mono-code text-xs">{activeKey.kid}</span>
                 </div>
                 <div className="rounded-lg bg-black/5 p-3 dark:bg-white/5">
@@ -138,7 +139,7 @@ export function SettingsPage() {
                     size="sm"
                     variant="ghost"
                     className="mt-2"
-                    onPress={() => {
+                    onClick={() => {
                       void navigator.clipboard.writeText(activeKey.publicKey);
                       toast.success('公钥已复制');
                     }}
@@ -157,14 +158,15 @@ export function SettingsPage() {
               {!activeKey ? (
                 <Button
                   size="sm"
-                  variant="primary"
-                  onPress={async () => {
+                  variant="default"
+                  className="bg-primary text-primary-foreground"
+                  onClick={async () => {
                     try {
                       const res = await api.post<{ kid: string; publicKey?: string }>('/api/admin/signing-keys/create', {});
-                      toast.success('已生成签名密钥 ' + res.kid, { description: res.publicKey, timeout: 0 });
+                      toast.success('已生成签名密钥 ' + res.kid, { description: res.publicKey, duration: Infinity });
                       void queryClient.invalidateQueries({ queryKey: ['signing-keys'] });
                     } catch (error) {
-                      toast.danger('生成失败', { description: error instanceof Error ? error.message : '' });
+                      toast.error('生成失败', { description: error instanceof Error ? error.message : '' });
                     }
                   }}
                 >
@@ -173,15 +175,16 @@ export function SettingsPage() {
               ) : (
                 <Button
                   size="sm"
-                  variant="danger-soft"
-                  onPress={async () => {
+                  variant="destructive"
+                  className="bg-destructive text-white"
+                  onClick={async () => {
                     if (!window.confirm('轮换签名密钥？新签发的授权文件将使用新密钥；旧授权文件仍可用旧公钥验签。')) return;
                     try {
                       const res = await api.post<{ current: { kid: string; publicKey: string } }>('/api/admin/signing-keys/rotate', {});
-                      toast.success('已轮换到 ' + res.current.kid, { description: res.current.publicKey, timeout: 0 });
+                      toast.success('已轮换到 ' + res.current.kid, { description: res.current.publicKey, duration: Infinity });
                       void queryClient.invalidateQueries({ queryKey: ['signing-keys'] });
                     } catch (error) {
-                      toast.danger('轮换失败', { description: error instanceof Error ? error.message : '' });
+                      toast.error('轮换失败', { description: error instanceof Error ? error.message : '' });
                     }
                   }}
                 >
@@ -203,20 +206,20 @@ export function SettingsPage() {
                 ))}
               </ul>
             ) : null}
-          </Card.Content>
+          </CardContent>
         </Card>
 
         {/* 账户安全：双因素 + 修改密码 */}
         <Card>
-          <Card.Header>
-            <Card.Title>账户安全</Card.Title>
-            <Card.Description>登录双因素验证与密码管理</Card.Description>
-          </Card.Header>
-          <Card.Content>
+          <CardHeader>
+            <CardTitle>账户安全</CardTitle>
+            <CardDescription>登录双因素验证与密码管理</CardDescription>
+          </CardHeader>
+          <CardContent>
             <TwoFactorSection />
             <Separator className="my-4" />
             <PasswordSection />
-          </Card.Content>
+          </CardContent>
         </Card>
       </div>
     </div>
@@ -243,14 +246,14 @@ function TwoFactorSection() {
       setStep('enable');
       setCode('');
     } catch (error) {
-      toast.danger('生成密钥失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('生成密钥失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   const enable = async () => {
-    if (code.length !== 6) { toast.danger('请输入 6 位动态码'); return; }
+    if (code.length !== 6) { toast.error('请输入 6 位动态码'); return; }
     setBusy(true);
     try {
       await api.post('/api/admin/auth/2fa/enable', { code });
@@ -259,15 +262,15 @@ function TwoFactorSection() {
       setCode('');
       await refreshUser();
     } catch (error) {
-      toast.danger('启用失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('启用失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   const disable = async () => {
-    if (!password) { toast.danger('请输入当前密码'); return; }
-    if (code.length !== 6) { toast.danger('请输入 6 位动态码'); return; }
+    if (!password) { toast.error('请输入当前密码'); return; }
+    if (code.length !== 6) { toast.error('请输入 6 位动态码'); return; }
     setBusy(true);
     try {
       await api.post('/api/admin/auth/2fa/disable', { password, code });
@@ -277,7 +280,7 @@ function TwoFactorSection() {
       setCode('');
       await refreshUser();
     } catch (error) {
-      toast.danger('关闭失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('关闭失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
@@ -290,14 +293,20 @@ function TwoFactorSection() {
           <p className="text-sm">双因素验证（TOTP）</p>
           <p className="text-[11px] opacity-55">登录时需输入认证器动态码，防盗号</p>
         </div>
-        <Chip size="sm" variant="soft" color={enabled ? 'success' : 'default'}>
-          <Chip.Label>{enabled ? '已开启' : '未开启'}</Chip.Label>
-        </Chip>
+        <Badge
+          variant="outline"
+          className={cn(
+            enabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-foreground',
+            'text-[11px] px-2 py-0.5',
+          )}
+        >
+          {enabled ? '已开启' : '未开启'}
+        </Badge>
       </div>
 
       {/* 未开启 → 开启流程 */}
       {!enabled && step === 'idle' && (
-        <Button size="sm" variant="primary" onPress={() => void setup()} isDisabled={busy}>
+        <Button size="sm" variant="default" className="bg-primary text-primary-foreground" onClick={() => void setup()} disabled={busy}>
           <ShieldCheck size={14} /> 开启双因素
         </Button>
       )}
@@ -309,29 +318,29 @@ function TwoFactorSection() {
           <p className="text-xs opacity-70">用 Google Authenticator / 1Password 等扫描或手动输入密钥：</p>
           <div className="flex items-center gap-2">
             <code className="mono-code flex-1 rounded bg-black/5 px-2 py-1 text-[11px] break-all dark:bg-white/5">{secret}</code>
-            <Button size="sm" variant="ghost" onPress={() => { void navigator.clipboard.writeText(secret); toast.success('密钥已复制'); }}>
+            <Button size="sm" variant="ghost" onClick={() => { void navigator.clipboard.writeText(secret); toast.success('密钥已复制'); }}>
               <Copy size={13} />
             </Button>
           </div>
           {otpauthUri ? (
             <p className="text-[11px] opacity-50 break-all">otpauth URI：{otpauthUri}</p>
           ) : null}
-          <TextField name="totpCode" value={code} onChange={setCode} fullWidth>
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>输入认证器显示的 6 位动态码</Label>
-            <Input inputMode="numeric" maxLength={6} placeholder="123456" />
-          </TextField>
+            <Input name="totpCode" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" maxLength={6} placeholder="123456" />
+          </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="primary" onPress={() => void enable()} isDisabled={busy}>
+            <Button size="sm" variant="default" className="bg-primary text-primary-foreground" onClick={() => void enable()} disabled={busy}>
               确认开启
             </Button>
-            <Button size="sm" variant="ghost" onPress={() => { setStep('idle'); setCode(''); }}>取消</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setCode(''); }}>取消</Button>
           </div>
         </div>
       )}
 
       {/* 已开启 → 关闭流程 */}
       {enabled && step === 'idle' && (
-        <Button size="sm" variant="danger-soft" onPress={() => { setStep('disable'); setPassword(''); setCode(''); }}>
+        <Button size="sm" variant="destructive" className="bg-destructive text-white" onClick={() => { setStep('disable'); setPassword(''); setCode(''); }}>
           <ShieldOff size={14} /> 关闭双因素
         </Button>
       )}
@@ -339,19 +348,19 @@ function TwoFactorSection() {
       {enabled && step === 'disable' && (
         <div className="flex flex-col gap-2 rounded-lg border border-rose-500/30 p-3">
           <p className="text-xs text-rose-500">关闭后登录只需密码，请确认</p>
-          <TextField name="disablePw" type="password" value={password} onChange={setPassword} fullWidth>
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>当前密码</Label>
-            <Input autoComplete="current-password" />
-          </TextField>
-          <TextField name="disableCode" value={code} onChange={setCode} fullWidth>
+            <Input name="disablePw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          </div>
+          <div className="flex flex-col gap-1.5 w-full">
             <Label>认证器 6 位动态码</Label>
-            <Input inputMode="numeric" maxLength={6} placeholder="123456" />
-          </TextField>
+            <Input name="disableCode" value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" maxLength={6} placeholder="123456" />
+          </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="danger" onPress={() => void disable()} isDisabled={busy}>
+            <Button size="sm" variant="destructive" className="bg-destructive text-white" onClick={() => void disable()} disabled={busy}>
               确认关闭
             </Button>
-            <Button size="sm" variant="ghost" onPress={() => setStep('idle')}>取消</Button>
+            <Button size="sm" variant="ghost" onClick={() => setStep('idle')}>取消</Button>
           </div>
         </div>
       )}
@@ -367,9 +376,9 @@ function PasswordSection() {
   const [busy, setBusy] = useState(false);
 
   const change = async () => {
-    if (!oldPassword || !newPassword) { toast.danger('请填写完整'); return; }
-    if (newPassword !== confirmPassword) { toast.danger('两次输入的新密码不一致'); return; }
-    if (newPassword.length < 8) { toast.danger('新密码至少 8 位'); return; }
+    if (!oldPassword || !newPassword) { toast.error('请填写完整'); return; }
+    if (newPassword !== confirmPassword) { toast.error('两次输入的新密码不一致'); return; }
+    if (newPassword.length < 8) { toast.error('新密码至少 8 位'); return; }
     setBusy(true);
     try {
       await api.post('/api/admin/auth/password', { currentPassword: oldPassword, newPassword });
@@ -378,7 +387,7 @@ function PasswordSection() {
       setNewPassword('');
       setConfirmPassword('');
     } catch (error) {
-      toast.danger('修改失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('修改失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
@@ -387,19 +396,19 @@ function PasswordSection() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm">修改密码</p>
-      <TextField name="oldPw" type="password" value={oldPassword} onChange={setOldPassword} fullWidth>
+      <div className="flex flex-col gap-1.5 w-full">
         <Label>当前密码</Label>
-        <Input autoComplete="current-password" />
-      </TextField>
-      <TextField name="newPw" type="password" value={newPassword} onChange={setNewPassword} fullWidth>
+        <Input name="oldPw" type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} autoComplete="current-password" />
+      </div>
+      <div className="flex flex-col gap-1.5 w-full">
         <Label>新密码（至少 8 位）</Label>
-        <Input autoComplete="new-password" />
-      </TextField>
-      <TextField name="confirmPw" type="password" value={confirmPassword} onChange={setConfirmPassword} fullWidth>
+        <Input name="newPw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+      </div>
+      <div className="flex flex-col gap-1.5 w-full">
         <Label>确认新密码</Label>
-        <Input autoComplete="new-password" />
-      </TextField>
-      <Button size="sm" variant="primary" onPress={() => void change()} isDisabled={busy}>
+        <Input name="confirmPw" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+      </div>
+      <Button size="sm" variant="default" className="bg-primary text-primary-foreground" onClick={() => void change()} disabled={busy}>
         <KeyRoundIcon size={14} /> 修改密码
       </Button>
     </div>

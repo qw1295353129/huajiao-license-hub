@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
 import { ApiError, portalApi } from '@/lib/api';
 
 /** 邮箱验证落地页：邮件链接 /portal/verify-email?token=… */
@@ -41,11 +43,11 @@ export function PortalVerifyEmailPage() {
   return (
     <div className="grid min-h-dvh place-items-center p-4">
       <Card className="w-full max-w-sm">
-        <Card.Header>
-          <Card.Title>验证邮箱</Card.Title>
-          <Card.Description>验证通过后可认领与该邮箱关联的订单与授权</Card.Description>
-        </Card.Header>
-        <Card.Content>
+        <CardHeader>
+          <CardTitle>验证邮箱</CardTitle>
+          <CardDescription>验证通过后可认领与该邮箱关联的订单与授权</CardDescription>
+        </CardHeader>
+        <CardContent>
           {!token ? (
             <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
               链接缺少令牌，请从邮件中重新打开
@@ -57,15 +59,14 @@ export function PortalVerifyEmailPage() {
           )}
           <Button
             type="button"
-            variant="primary"
-            fullWidth
-            className="mt-4"
-            isDisabled={!token || busy}
-            onPress={() => setAttempt((n) => n + 1)}
+            variant="default"
+            className="bg-primary text-primary-foreground w-full mt-4"
+            disabled={!token || busy}
+            onClick={() => setAttempt((n) => n + 1)}
           >
             重试验证
           </Button>
-        </Card.Content>
+        </CardContent>
       </Card>
     </div>
   );

@@ -1,13 +1,26 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Dropdown, Input, Label, ListBox, Modal, Select, TextField, toast } from '@/lib/heroui-compat';
-import type { Key } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/animate-ui/components/radix/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/animate-ui/components/radix/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { toast } from 'sonner';
 import { Plus, Receipt } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import type { Paginated, Plan, ProductRow } from '@/lib/types';
 import { DataTable, Pagination, type Column } from '@/components/common/DataTable';
 import { ErrorNotice, PageHeader, StatCard, StatusChip } from '@/components/common/ui';
 import { formatDateTime, formatMoney } from '@/lib/format';
+
+type Key = string | number;
 
 interface OrderRow {
   id: string;
@@ -92,78 +105,76 @@ export function OrdersPage() {
           {row.status === 'pending' ? (
             <Button
               size="sm"
-              variant="primary"
-              onPress={async () => {
+              variant="default"
+              className="bg-primary text-primary-foreground"
+              onClick={async () => {
                 try {
                   const res = await api.post<{ licenses: string[]; alreadyPaid: boolean }>(
                     '/api/admin/orders/' + row.id + '/mark-paid', {});
                   toast.success(res.alreadyPaid ? '订单已是已支付状态' : '已标记支付并发码 ' + res.licenses.length + ' 条');
                   refresh();
                 } catch (error) {
-                  toast.danger('操作失败', { description: error instanceof Error ? error.message : '' });
+                  toast.error('操作失败', { description: error instanceof Error ? error.message : '' });
                 }
               }}
             >
               标记已支付
             </Button>
           ) : null}
-          <Dropdown>
-            <Dropdown.Trigger className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5" aria-label="更多操作">
-              更多
-            </Dropdown.Trigger>
-            <Dropdown.Popover placement="bottom end">
-              <Dropdown.Menu>
-                <Dropdown.Item
-                  id="issue"
-                  onAction={async () => {
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="rounded-lg border border-black/10 px-2 py-1 text-xs hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5" aria-label="更多操作">
+                更多
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={async () => {
+                  try {
+                    const res = await api.post<{ issued: number }>('/api/admin/orders/' + row.id + '/issue-licenses', {});
+                    toast.success(res.issued > 0 ? '补发 ' + res.issued + ' 条授权' : '没有待发码的条目');
+                    refresh();
+                  } catch (error) {
+                    toast.error('补发失败', { description: error instanceof Error ? error.message : '' });
+                  }
+                }}
+              >
+                补发缺失授权
+              </DropdownMenuItem>
+              {row.status === 'paid' ? (
+                <DropdownMenuItem
+                  onSelect={async () => {
+                    if (!window.confirm('确认退款？关联授权会被同时吊销。')) return;
                     try {
-                      const res = await api.post<{ issued: number }>('/api/admin/orders/' + row.id + '/issue-licenses', {});
-                      toast.success(res.issued > 0 ? '补发 ' + res.issued + ' 条授权' : '没有待发码的条目');
+                      const res = await api.post<{ revokedLicenses: number }>(
+                        '/api/admin/orders/' + row.id + '/refund', { reason: '后台手工退款' });
+                      toast.success('已退款，吊销授权 ' + res.revokedLicenses + ' 条');
                       refresh();
                     } catch (error) {
-                      toast.danger('补发失败', { description: error instanceof Error ? error.message : '' });
+                      toast.error('退款失败', { description: error instanceof Error ? error.message : '' });
                     }
                   }}
                 >
-                  补发缺失授权
-                </Dropdown.Item>
-                {row.status === 'paid' ? (
-                  <Dropdown.Item
-                    id="refund"
-                    onAction={async () => {
-                      if (!window.confirm('确认退款？关联授权会被同时吊销。')) return;
-                      try {
-                        const res = await api.post<{ revokedLicenses: number }>(
-                          '/api/admin/orders/' + row.id + '/refund', { reason: '后台手工退款' });
-                        toast.success('已退款，吊销授权 ' + res.revokedLicenses + ' 条');
-                        refresh();
-                      } catch (error) {
-                        toast.danger('退款失败', { description: error instanceof Error ? error.message : '' });
-                      }
-                    }}
-                  >
-                    退款并吊销授权
-                  </Dropdown.Item>
-                ) : null}
-                {row.status === 'pending' ? (
-                  <Dropdown.Item
-                    id="cancel"
-                    onAction={async () => {
-                      try {
-                        await api.post('/api/admin/orders/' + row.id + '/cancel', {});
-                        toast.success('订单已取消');
-                        refresh();
-                      } catch (error) {
-                        toast.danger('取消失败', { description: error instanceof Error ? error.message : '' });
-                      }
-                    }}
-                  >
-                    取消订单
-                  </Dropdown.Item>
-                ) : null}
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
+                  退款并吊销授权
+                </DropdownMenuItem>
+              ) : null}
+              {row.status === 'pending' ? (
+                <DropdownMenuItem
+                  onSelect={async () => {
+                    try {
+                      await api.post('/api/admin/orders/' + row.id + '/cancel', {});
+                      toast.success('订单已取消');
+                      refresh();
+                    } catch (error) {
+                      toast.error('取消失败', { description: error instanceof Error ? error.message : '' });
+                    }
+                  }}
+                >
+                  取消订单
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -187,17 +198,18 @@ export function OrdersPage() {
       </div>
 
       <div className="mb-3 w-44">
-        <Select name="status" placeholder="全部状态" selectedKey={status} onSelectionChange={(key) => { setStatus(key); setPage(1); }} fullWidth>
+        <div className="flex flex-col gap-1.5 w-full">
           <Label>状态</Label>
-          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-          <Select.Popover>
-            <ListBox>
+          <Select name="status" value={status != null ? String(status) : ''}
+            onValueChange={(key) => { setStatus(key); setPage(1); }}>
+            <SelectTrigger className="w-full"><SelectValue placeholder="全部状态" /></SelectTrigger>
+            <SelectContent>
               {['pending', 'paid', 'refunded', 'cancelled'].map((value) => (
-                <ListBox.Item key={value} id={value} textValue={value}>{value}</ListBox.Item>
+                <SelectItem key={value} value={value}>{value}</SelectItem>
               ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <DataTable
@@ -243,7 +255,7 @@ function CreateOrderModal({ products, onDone }: { products: ProductRow[]; onDone
       });
       if (markPaid && res.licenses && res.licenses.length > 0) {
         void navigator.clipboard.writeText(res.licenses.join('\n'));
-        toast.success('订单已支付并发码 ' + res.licenses.length + ' 条（已复制）', { timeout: 0 });
+        toast.success('订单已支付并发码 ' + res.licenses.length + ' 条（已复制）', { duration: Infinity });
       } else {
         toast.success('订单已创建：' + res.orderNo);
       }
@@ -251,83 +263,80 @@ function CreateOrderModal({ products, onDone }: { products: ProductRow[]; onDone
       setEmail(''); setCoupon(''); setQuantity('1');
       onDone();
     } catch (error) {
-      toast.danger('建单失败', { description: error instanceof Error ? error.message : '' });
+      toast.error('建单失败', { description: error instanceof Error ? error.message : '' });
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={setOpen}>
-      <Modal.Trigger className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-        <Plus size={15} /> 手工建单
-      </Modal.Trigger>
-      <Modal.Backdrop isDismissable variant="blur">
-        <Modal.Container size="md" placement="center" scroll="inside">
-          <Modal.Dialog>
-            <Modal.Header>
-              <Modal.Heading>手工建单</Modal.Heading>
-              <Modal.CloseTrigger />
-            </Modal.Header>
-            <Modal.Body className="flex flex-col gap-4">
-              <TextField name="email" type="email" value={email} onChange={setEmail} isRequired fullWidth>
-                <Label>客户邮箱</Label>
-                <Input placeholder="buyer@example.com" />
-              </TextField>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+          <Plus size={15} /> 手工建单
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>手工建单</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>客户邮箱</Label>
+            <Input name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="buyer@example.com" />
+          </div>
 
-              <Select name="product" placeholder="选择产品" selectedKey={productId}
-                onSelectionChange={(key) => { setProductId(key); setPlanId(null); }} isRequired fullWidth>
-                <Label>产品</Label>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {products.map((product) => (
-                      <ListBox.Item key={product.id} id={product.id} textValue={product.name}>{product.name}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>产品</Label>
+            <Select name="product" required value={productId != null ? String(productId) : ''}
+              onValueChange={(key) => { setProductId(key); setPlanId(null); }}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="选择产品" /></SelectTrigger>
+              <SelectContent>
+                {products.map((product) => (
+                  <SelectItem key={product.id} value={String(product.id)}>{product.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <Select name="plan" placeholder={productId ? '选择策略' : '请先选择产品'} selectedKey={planId}
-                onSelectionChange={setPlanId} isRequired fullWidth isDisabled={!productId}>
-                <Label>授权策略</Label>
-                <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {(plans.data ?? []).map((plan) => (
-                      <ListBox.Item key={plan.id} id={plan.id} textValue={plan.name}>
-                        {plan.name} · {formatMoney(plan.priceCents, plan.currency)}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+          <div className="flex flex-col gap-1.5 w-full">
+            <Label>授权策略</Label>
+            <Select name="plan" required value={planId != null ? String(planId) : ''}
+              onValueChange={setPlanId} disabled={!productId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={productId ? '选择策略' : '请先选择产品'} />
+              </SelectTrigger>
+              <SelectContent>
+                {(plans.data ?? []).map((plan) => (
+                  <SelectItem key={plan.id} value={String(plan.id)}>{plan.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <TextField name="quantity" value={quantity} onChange={setQuantity} fullWidth>
-                  <Label>数量</Label>
-                  <Input inputMode="numeric" />
-                </TextField>
-                <TextField name="coupon" value={coupon} onChange={setCoupon} fullWidth>
-                  <Label>优惠券代码（可选）</Label>
-                  <Input placeholder="SAVE10" />
-                </TextField>
-              </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5 w-full">
+              <Label>数量</Label>
+              <Input name="quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} inputMode="numeric" />
+            </div>
+            <div className="flex flex-col gap-1.5 w-full">
+              <Label>优惠券代码（可选）</Label>
+              <Input name="coupon" value={coupon} onChange={(e) => setCoupon(e.target.value)} placeholder="SAVE10" />
+            </div>
+          </div>
 
-              <label className="flex items-center gap-2 text-xs opacity-75">
-                <input type="checkbox" checked={markPaid} onChange={(event) => setMarkPaid(event.target.checked)} />
-                建单后立即标记为已支付并自动发码（线下收款场景）
-              </label>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={() => setOpen(false)}>取消</Button>
-              <Button variant="primary" onPress={() => void submit()} isDisabled={busy || !email || !productId || !planId}>
-                {busy ? '处理中…' : '创建订单'}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+          <label className="flex items-center gap-2 text-xs opacity-75">
+            <input type="checkbox" checked={markPaid} onChange={(event) => setMarkPaid(event.target.checked)} />
+            建单后立即标记为已支付并自动发码（线下收款场景）
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+          <Button variant="default" className="bg-primary text-primary-foreground" onClick={() => void submit()} disabled={busy || !email || !productId || !planId}>
+            {busy ? '处理中…' : '创建订单'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

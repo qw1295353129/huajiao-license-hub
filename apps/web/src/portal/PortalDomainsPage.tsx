@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Chip, Input, Separator, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 import { Globe, Plus } from 'lucide-react';
 import { portalApi } from '@/lib/api';
 import type { AuthorizedDomain, DomainLicenseRow } from '@/lib/domain-types';
@@ -33,18 +38,18 @@ export function PortalDomainsPage() {
 
       {items.length === 0 ? (
         <Card>
-          <Card.Content>
+          <CardContent>
             <p className="py-8 text-center text-sm opacity-60">
               还没有域名授权。如果你购买的是「按域名」的授权，它会在付款后出现在这里；
               没有的话请联系作者开通。
             </p>
-          </Card.Content>
+          </CardContent>
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
           {items.map((license) => (
             <Card key={license.id}>
-              <Card.Content>
+              <CardContent>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -59,11 +64,19 @@ export function PortalDomainsPage() {
                     </div>
                   </div>
                   {license.expiresAt ? (
-                    <Chip color={(daysLeft(license.expiresAt) ?? 0) <= 14 ? 'warning' : 'success'} size="sm" variant="soft">
-                      <Chip.Label>剩 {daysLeft(license.expiresAt)} 天</Chip.Label>
-                    </Chip>
+                    <Badge
+                      variant="outline"
+                      className={
+                        ((daysLeft(license.expiresAt) ?? 0) <= 14
+                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400') +
+                        ' text-[11px] px-2 py-0.5'
+                      }
+                    >
+                      剩 {daysLeft(license.expiresAt)} 天
+                    </Badge>
                   ) : (
-                    <Chip color="accent" size="sm" variant="soft"><Chip.Label>长期</Chip.Label></Chip>
+                    <Badge variant="outline" className="bg-primary/15 text-primary text-[11px] px-2 py-0.5">长期</Badge>
                   )}
                 </div>
 
@@ -71,7 +84,7 @@ export function PortalDomainsPage() {
                 <DomainEditor license={license} onChanged={() => {
                   void queryClient.invalidateQueries({ queryKey: ['portal-domain-licenses'] });
                 }} />
-              </Card.Content>
+              </CardContent>
             </Card>
           ))}
         </div>
@@ -93,7 +106,7 @@ function DomainEditor({ license, onChanged }: { license: MyDomainLicense; onChan
       setValue('');
       onChanged();
     },
-    onError: (error: Error) => toast.danger('添加失败', { description: error.message }),
+    onError: (error: Error) => toast.error('添加失败', { description: error.message }),
   });
 
   const remove = useMutation({
@@ -104,7 +117,7 @@ function DomainEditor({ license, onChanged }: { license: MyDomainLicense; onChan
       toast.success('已解绑');
       onChanged();
     },
-    onError: (error: Error) => toast.danger('解绑失败', { description: error.message }),
+    onError: (error: Error) => toast.error('解绑失败', { description: error.message }),
   });
 
   return (
@@ -124,9 +137,10 @@ function DomainEditor({ license, onChanged }: { license: MyDomainLicense; onChan
               </div>
               <Button
                 size="sm"
-                variant="danger-soft"
-                isDisabled={remove.isPending}
-                onPress={() => {
+                variant="destructive"
+                className="bg-destructive text-white"
+                disabled={remove.isPending}
+                onClick={() => {
                   if (window.confirm('解绑域名 ' + row.domain + '？该网站会立即失效。')) remove.mutate(row.id);
                 }}
               >
@@ -145,10 +159,11 @@ function DomainEditor({ license, onChanged }: { license: MyDomainLicense; onChan
           className="mono-code"
         />
         <Button
-          variant="primary"
+          variant="default"
           size="sm"
-          isDisabled={add.isPending || value.trim().length < 3 || active.length >= license.maxDomains}
-          onPress={() => add.mutate(value)}
+          className="bg-primary text-primary-foreground"
+          disabled={add.isPending || value.trim().length < 3 || active.length >= license.maxDomains}
+          onClick={() => add.mutate(value)}
         >
           <Plus size={14} /> 添加
         </Button>

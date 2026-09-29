@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, Input, Label, TextField, toast } from '@/lib/heroui-compat';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { ApiError, portalApi } from '@/lib/api';
 
 export function PortalResetPasswordPage() {
@@ -29,23 +33,28 @@ export function PortalResetPasswordPage() {
   return (
     <div className="grid min-h-dvh place-items-center p-4">
       <Card className="w-full max-w-sm">
-        <Card.Header>
-          <Card.Title>重置密码</Card.Title>
-          <Card.Description>链接 30 分钟内有效，且只能使用一次</Card.Description>
-        </Card.Header>
-        <Card.Content>
+        <CardHeader>
+          <CardTitle>重置密码</CardTitle>
+          <CardDescription>链接 30 分钟内有效，且只能使用一次</CardDescription>
+        </CardHeader>
+        <CardContent>
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <TextField name="password" type="password" value={password} onChange={setPassword} isRequired fullWidth isInvalid={Boolean(error)}>
+            <div className="flex flex-col gap-1.5 w-full">
               <Label>新密码</Label>
-              <Input placeholder="至少 8 位，含字母与数字" autoFocus autoComplete="new-password" />
-            </TextField>
+              <Input
+                name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="至少 8 位，含字母与数字" autoFocus autoComplete="new-password"
+                required aria-invalid={Boolean(error) || undefined}
+                className={error ? 'border-destructive' : undefined}
+              />
+            </div>
             {error ? <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
             {!token ? <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600">链接缺少令牌，请重新发起找回密码</p> : null}
-            <Button type="submit" variant="primary" fullWidth isDisabled={busy || !token || password.length < 8}>
+            <Button type="submit" variant="default" className="bg-primary text-primary-foreground w-full" disabled={busy || !token || password.length < 8}>
               {busy ? '提交中…' : '确认重置'}
             </Button>
           </form>
-        </Card.Content>
+        </CardContent>
       </Card>
     </div>
   );

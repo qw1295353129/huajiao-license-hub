@@ -1,5 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Button, Card, Separator, toast } from '@/lib/heroui-compat';
+import { toast } from 'sonner';
+import { Button } from '@/components/animate-ui/components/buttons/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Globe, KeyRound, LogOut, Receipt, Ticket, User } from 'lucide-react';
 import { usePortalAuth } from '@/lib/auth';
 import { useSiteName } from '@/lib/useSiteInfo';
@@ -42,7 +45,7 @@ export function PortalLayout() {
             <Button
               size="sm"
               variant="ghost"
-              onPress={async () => {
+              onClick={async () => {
                 await logout();
                 toast.success('已退出登录');
                 navigate('/portal', { replace: true });
@@ -75,11 +78,11 @@ export function PortalLayout() {
         <Outlet />
 
         <Card className="text-center">
-          <Card.Content>
+          <CardContent>
             <p className="text-xs opacity-55">
               遇到问题？把授权码前 4 位与问题描述发给客服，通常几分钟内可解决。
             </p>
-          </Card.Content>
+          </CardContent>
         </Card>
         <Separator />
         <p className="pb-4 text-center text-[11px] opacity-40">
