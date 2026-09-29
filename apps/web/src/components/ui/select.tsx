@@ -13,17 +13,35 @@ import { useControlledState } from "@/hooks/use-controlled-state"
 const SelectOpenContext = React.createContext<boolean>(false)
 
 /**
- * 已选文本登记表：SelectContent 会随开合卸载（AnimatePresence），
+ * 已选文本来源：SelectContent 会随开合卸载（AnimatePresence），
  * Radix 的 Select.Value 靠弹层里的 ItemText 提供文本，弹层一卸载就显示为空 ——
- * 这里由 SelectItem 把「value → 文本」登记到 Select，SelectValue 在弹层卸载后照常显示。
+ * 这里直接从 JSX 树里读出「value → 文本」（不依赖弹层是否挂载），
+ * 于是「弹窗重开后仍带值」「选完立刻关弹层」都能正确显示。
  */
 type SelectState = { value?: string; labels: Map<string, React.ReactNode> }
 const SelectStateContext = React.createContext<SelectState | null>(null)
+
+function collectSelectLabels(
+  children: React.ReactNode,
+  out: Map<string, React.ReactNode> = new Map(),
+): Map<string, React.ReactNode> {
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: string; children?: React.ReactNode }
+    if (child.type === SelectItem && props.value !== undefined && !out.has(String(props.value))) {
+      out.set(String(props.value), props.children)
+      return
+    }
+    if (props.children) collectSelectLabels(props.children, out)
+  })
+  return out
+}
 
 function Select({
   open,
   defaultOpen,
   onOpenChange,
+  children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   const [isOpen, setIsOpen] = useControlledState<boolean>({
@@ -31,10 +49,11 @@ function Select({
     defaultValue: defaultOpen ?? false,
     onChange: onOpenChange,
   })
-  const labelsRef = React.useRef(new Map<string, React.ReactNode>())
+  const labels = collectSelectLabels(children)
   const state = React.useMemo<SelectState>(
-    () => ({ value: props.value, labels: labelsRef.current }),
-    [props.value],
+    () => ({ value: props.value, labels }),
+    // labels 每次渲染重建（JSX 里的选项本身就是最新的），跟着 value 一起换引用
+    [props.value, labels],
   )
 
   return (
@@ -45,7 +64,9 @@ function Select({
           {...props}
           open={isOpen}
           onOpenChange={setIsOpen}
-        />
+        >
+          {children}
+        </SelectPrimitive.Root>
       </SelectOpenContext.Provider>
     </SelectStateContext.Provider>
   )
@@ -69,10 +90,10 @@ function SelectValue({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Value>) {
   const state = React.useContext(SelectStateContext)
-  // 弹层卸载后 Radix 取不到已选文本，用登记表兜底；children 优先（显式指定时）
+  // 弹层卸载后 Radix 取不到已选文本，用 Select 从 JSX 里读出的「value → 文本」兜底
   const fallback =
     children ??
-    (state?.value ? state.labels.get(state.value) : undefined)
+    (state?.value !== undefined ? state.labels.get(String(state.value)) : undefined)
   return <SelectPrimitive.Value data-slot="select-value" {...props}>{fallback}</SelectPrimitive.Value>
 }
 
@@ -206,11 +227,6 @@ function SelectItem({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Item>) {
   const reduceMotion = useReducedMotion()
-  const state = React.useContext(SelectStateContext)
-  // 登记「value → 文本」；不清理：弹层卸载后仍要能显示已选文本
-  React.useEffect(() => {
-    if (state && value !== undefined) state.labels.set(value, children)
-  })
 
   return (
     <SelectPrimitive.Item
