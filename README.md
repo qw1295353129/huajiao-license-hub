@@ -158,5 +158,5 @@ node sdk/demo.mjs <API_KEY> <LICENSE_KEY>        # 客户端接入演示
 | [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、密钥管理、授权码存储与签名 |
 | [docs/CLIENT-INTEGRATION.md](docs/CLIENT-INTEGRATION.md) | **客户端对接教程**（桌面软件 / 网站，含多语言验签示例） |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker 部署、故障排查、备份升级、反代配置 |
-| [docs/UI-CHEATSHEET.md](docs/UI-CHEATSHEET.md) | **前端 UI 组件速查**（heroui-compat API、Animate UI 动效约定、装组件与排错） |
+| [docs/UI-CHEATSHEET.md](docs/UI-CHEATSHEET.md) | **前端 UI 组件速查**（组件导入路径、shadcn/radix API、Animate UI 动效约定、装组件与排错） |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 里程碑与验收标准 |

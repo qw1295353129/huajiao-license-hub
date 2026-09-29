@@ -100,5 +100,9 @@
 - [x] 修复 `useIsInView` 的 ref 接线（挂错 ref 会让 IntersectionObserver 不触发、元素卡在入场初态）
 - [x] 发版缓存修复：`index.html` 返回 `no-store`，避免浏览器启发式缓存导致发版后长期拿旧 bundle
 - [x] 文档：`docs/UI-CHEATSHEET.md` 取代过时的 `HEROUI-V3-CHEATSHEET.md`（API 映射、动效约定、装组件与排错）
+- [x] 后续重构（`e6d7515`）：**移除 heroui-compat 兼容层**，页面直连 Animate UI / shadcn（30+ 页面改标准 shadcn/radix props），
+      公共页面件收敛到 `components/common`（DataTable / PageHeader / StatusChip / ConfirmModal 等）
+- [x] 缺陷修复：Select 弹层随 AnimatePresence 卸载后已选文本丢失（改为从 JSX 收集「value → 文本」兜底，
+      弹窗重开仍显示，`7858499`/`09920a7`）；Switch 不再把 Radix 专用 props 铺到 DOM（`6ad5e45`）
 - **证据**：web 类型检查 0 错误、生产构建通过；浏览器实测登录全链路、Select 开合/选值、Tabs 切换、Spinner 渲染正常；
   nginx 配置 `nginx -t` 通过；线上 bundle 与本地构建比对确认部署版本（`index-BrmPGD5y.js` → `index-B4chxd0B.js`）
