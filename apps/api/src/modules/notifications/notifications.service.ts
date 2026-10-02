@@ -6,6 +6,7 @@ import { DB } from '../../db/db.module';
 import type { DatabaseHandle } from '../../db/db.provider';
 import { emailLogs } from '../../db/schema';
 import { normalizePaging } from '../../common/pagination';
+import { SettingsService } from '../settings/settings.service';
 import { renderTemplate, type EmailTemplate } from './templates';
 
 export interface SendMailInput {
@@ -28,6 +29,7 @@ export class NotificationsService {
   constructor(
     @Inject(DB) private readonly handle: DatabaseHandle,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
+    private readonly settings: SettingsService,
   ) {
     if (config.smtp.host) {
       this.transporter = nodemailer.createTransport({
@@ -44,8 +46,9 @@ export class NotificationsService {
   }
 
   async send(input: SendMailInput): Promise<{ ok: boolean; skipped?: boolean }> {
+    const site = await this.settings.get();
     const { subject, text, html } = renderTemplate(input.template, {
-      siteName: this.config.appOrigin,
+      siteName: site.siteName,
       ...input.vars,
     });
 
