@@ -1,5 +1,5 @@
 /**
- * LicenseHub 客户端 SDK（零依赖，浏览器 / Node 18+ / Electron / Tauri 通用）。
+ * 花椒授权管理系统 · 客户端 SDK（零依赖，浏览器 / Node 18+ / Electron / Tauri 通用）。
  *
  * 设计要点：
  * 1. 只用 fetch + WebCrypto，不引入任何运行时依赖；

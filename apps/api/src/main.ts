@@ -34,7 +34,7 @@ async function bootstrap(): Promise<void> {
   }
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
-  logger.log('LicenseHub API 已启动：http://localhost:' + config.port + '/api/health  （' + config.env + '）');
+  logger.log('花椒授权管理系统 API 已启动：http://localhost:' + config.port + '/api/health  （' + config.env + '）');
 }
 
 void bootstrap();

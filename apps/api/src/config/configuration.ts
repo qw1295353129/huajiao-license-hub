@@ -207,7 +207,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       secure: (env.SMTP_SECURE ?? 'true') === 'true',
       user: env.SMTP_USER?.trim() || null,
       password: env.SMTP_PASSWORD?.trim() || null,
-      from: env.SMTP_FROM ?? 'LicenseHub <no-reply@example.com>',
+      from: env.SMTP_FROM ?? '花椒授权管理系统 <no-reply@example.com>',
     },
   };
 }

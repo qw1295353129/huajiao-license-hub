@@ -73,7 +73,7 @@ services:
         SMTP_SECURE: ${SMTP_SECURE:-true}
         SMTP_USER: ${SMTP_USER:-}
         SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-        SMTP_FROM: ${SMTP_FROM:-LicenseHub <no-reply@example.com>}
+        SMTP_FROM: "${SMTP_FROM:-花椒授权管理系统 <no-reply@example.com>}"
     depends_on:
       postgres:
         condition: service_healthy

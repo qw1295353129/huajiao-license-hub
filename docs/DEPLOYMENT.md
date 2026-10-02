@@ -31,7 +31,7 @@ bash init-env.sh                 # 生成/修复 .env（自动校验 DATA_KEY、
 #   BOOTSTRAP_ADMIN_EMAIL / BOOTSTRAP_ADMIN_PASSWORD=首次启动的管理员
 
 docker compose up -d --build
-docker compose logs -f api     # 看到 "LicenseHub API 已启动" 即成功
+docker compose logs -f api     # 看到 "花椒授权管理系统 API 已启动" 即成功
 ~~~
 
 访问 `http://<服务器IP>:8080`（或你的域名），用 `.env` 中的 `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` 登录，

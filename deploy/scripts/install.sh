@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键部署 LicenseHub（服务器上第一次安装时用；后续更新用 deploy/scripts/update.sh）
+# 一键部署花椒授权管理系统（服务器上第一次安装时用；后续更新用 deploy/scripts/update.sh）
 #
 #   bash deploy/scripts/install.sh                    # 全自动：随机生成所有密钥与初始管理员口令
 #   bash deploy/scripts/install.sh --email me@x.com    # 指定初始管理员邮箱

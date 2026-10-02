@@ -16,7 +16,7 @@ export interface SiteSettings {
 }
 
 export const DEFAULT_SETTINGS: SiteSettings = {
-  siteName: 'LicenseHub',
+  siteName: '花椒授权管理系统',
   allowRegistration: true,
   defaultCurrency: 'CNY',
   trialDays: 14,

@@ -26,7 +26,7 @@ export async function configureApp(app: INestApplication, config: AppConfig): Pr
 
 export function setupSwagger(app: INestApplication, options: { persistAuthorization?: boolean } = {}): void {
   const document = SwaggerModule.createDocument(app, new DocumentBuilder()
-    .setTitle('LicenseHub API')
+    .setTitle('花椒授权管理系统 API')
     .setDescription('软件授权管理系统 · 管理端 / 用户门户 / 客户端授权接口')
     .setVersion('0.1.0')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'admin')

@@ -279,7 +279,7 @@ export class AdminAuthService implements OnApplicationBootstrap {
     await this.db.update(admins)
       .set({ totpSecretEnc: this.crypto.encrypt(secret), updatedAt: new Date() })
       .where(eq(admins.id, adminId));
-    return { secret, otpauthUri: otpauthUri(secret, admin.email, 'LicenseHub') };
+    return { secret, otpauthUri: otpauthUri(secret, admin.email, '花椒授权管理系统') };
   }
 
   async enableTotp(adminId: string, code: string): Promise<{ ok: true; recoveryHint: string }> {

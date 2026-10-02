@@ -77,7 +77,7 @@ export function SettingsPage() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5 w-full">
                 <Label>站点名称</Label>
-                <Input name="siteName" value={form.siteName} onChange={(e) => setForm({ ...form, siteName: e.target.value })} placeholder="LicenseHub" />
+                <Input name="siteName" value={form.siteName} onChange={(e) => setForm({ ...form, siteName: e.target.value })} placeholder="花椒授权管理系统" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

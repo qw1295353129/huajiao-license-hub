@@ -1,5 +1,5 @@
 /**
- * LicenseHub 数据模型（Drizzle / PostgreSQL）。
+ * 花椒授权管理系统数据模型（Drizzle / PostgreSQL）。
  *
  * 约定：
  * - 枚举一律使用 text + `$type<Union>()`，不用 PG enum —— 迁移更安全、可自由增删取值。

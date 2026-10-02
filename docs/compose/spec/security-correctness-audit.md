@@ -10,7 +10,7 @@ commits: 52d7e6d..5007426
 
 ## Report
 
-**What was built** — 对 LicenseHub 全仓（后端鉴权/业务、门户、域名授权、SDK、前端、部署配置）完成安全与正确性审查，产出 C1–C7 / N1–N27 / suggestion 分级清单。全部 critical 与 normal 已在分支 `fix/security-correctness` 修复：生产默认口令与 DATA_KEY 强制、门户邮箱验证与认领门槛（含验证落地页与 resend）、域名 API Key 产品绑定与 deactivate 令牌、SDK 验签 fail-closed 与 kid 映射、订单发码幂等/自愈与优惠券原子占用、导出 reveal 布尔、离线签名前写入 grace days；并覆盖会话保留/角色失效、Throttler 与门户锁定、盲索引大小写敏感、配额 TOCTOU、支付金额与恒定时间 HMAC、Webhook SSRF、nginx CSP/XFF、dockerignore、按角色隐藏导航等。建议级问题按约定只记录不改。
+**What was built** — 对花椒授权管理系统全仓（后端鉴权/业务、门户、域名授权、SDK、前端、部署配置）完成安全与正确性审查，产出 C1–C7 / N1–N27 / suggestion 分级清单。全部 critical 与 normal 已在分支 `fix/security-correctness` 修复：生产默认口令与 DATA_KEY 强制、门户邮箱验证与认领门槛（含验证落地页与 resend）、域名 API Key 产品绑定与 deactivate 令牌、SDK 验签 fail-closed 与 kid 映射、订单发码幂等/自愈与优惠券原子占用、导出 reveal 布尔、离线签名前写入 grace days；并覆盖会话保留/角色失效、Throttler 与门户锁定、盲索引大小写敏感、配额 TOCTOU、支付金额与恒定时间 HMAC、Webhook SSRF、nginx CSP/XFF、dockerignore、按角色隐藏导航等。建议级问题按约定只记录不改。
 
 **Verification** — `pnpm typecheck` PASS；`pnpm --filter @license-hub/shared build` + `test` PASS 10/10；`pnpm --filter @license-hub/api test:all` PASS 114/114（基线 84，含新增回归）；`pnpm --filter @license-hub/web typecheck`/`build` PASS；`node scripts/acceptance.mjs` PASS 52/52；`check-docker-config.mjs` / `check-runtime-bundle.mjs` PASS。独立复审 request-changes 后 9 项 critical 修复逐项 re-review APPROVE，无新 critical。
 
@@ -24,7 +24,7 @@ commits: 52d7e6d..5007426
 
 ## [S1] Problem
 
-LicenseHub 是安全敏感的授权发放系统（发码、激活、Ed25519 验签、设备绑定、域名授权、API Key、门户会话）。全仓需要一次系统性的安全与正确性审查，找出鉴权/签名/授权边界、敏感数据处理、业务逻辑漏洞等问题；严重与一般问题在本分支修复，建议级问题只报告。
+花椒授权管理系统是安全敏感的授权发放系统（发码、激活、Ed25519 验签、设备绑定、域名授权、API Key、门户会话）。全仓需要一次系统性的安全与正确性审查，找出鉴权/签名/授权边界、敏感数据处理、业务逻辑漏洞等问题；严重与一般问题在本分支修复，建议级问题只报告。
 
 ## [S2] Design
 

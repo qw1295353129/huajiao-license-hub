@@ -12,7 +12,7 @@ export function useSiteInfo() {
     queryKey: ['site-info'],
     queryFn: async (): Promise<PublicSiteInfo> => {
       const res = await fetch('/api/site');
-      if (!res.ok) return { siteName: 'LicenseHub', allowRegistration: true };
+      if (!res.ok) return { siteName: '花椒授权管理系统', allowRegistration: true };
       return (await res.json()) as PublicSiteInfo;
     },
     staleTime: 5 * 60_000,
@@ -30,5 +30,5 @@ export function useSiteInfo() {
 /** 取站点名称（带默认值）。 */
 export function useSiteName(): string {
   const { data } = useSiteInfo();
-  return data?.siteName || 'LicenseHub';
+  return data?.siteName || '花椒授权管理系统';
 }

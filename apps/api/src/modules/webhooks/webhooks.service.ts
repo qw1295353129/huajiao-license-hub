@@ -245,7 +245,7 @@ export class WebhooksService {
       event,
       id: 'test-' + randomUUID(),
       createdAt: new Date().toISOString(),
-      data: { test: true, message: '这是一条来自 LicenseHub 的测试事件' },
+      data: { test: true, message: '这是一条来自花椒授权管理系统的测试事件' },
     };
     const [delivery] = await this.db.insert(webhookDeliveries).values({
       endpointId: id,

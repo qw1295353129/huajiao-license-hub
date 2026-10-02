@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在服务器上更新 LicenseHub：拉取最新代码 → 重建镜像 → 重启 → 打印状态
+# 在服务器上更新花椒授权管理系统：拉取最新代码 → 重建镜像 → 重启 → 打印状态
 #
 #   用法：bash deploy/scripts/update.sh
 #
@@ -70,5 +70,5 @@ echo
 echo "==> api 最近 30 行日志"
 docker compose logs --tail=30 api
 echo
-echo "日志里看到「LicenseHub API 已启动」即为成功。"
+echo "日志里看到「花椒授权管理系统 API 已启动」即为成功。"
 echo "登录不进去时：docker compose exec api node dist/db/admin-cli.js list / unlock / reset --email <邮箱>"

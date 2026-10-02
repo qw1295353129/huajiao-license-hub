@@ -69,7 +69,7 @@ function maskedUrl(url: string | null): string {
 
 /** 体检：逐项解释「api 容器为什么反复重启」——不打印任何密钥明文。 */
 async function doctor(): Promise<void> {
-  console.log('[doctor] LicenseHub 部署体检（输出不含密钥明文）');
+  console.log('[doctor] 花椒授权管理系统部署体检（输出不含密钥明文）');
   console.log('');
 
   console.log('─ 1. 启动配置校验（api 容器用的是同一套规则）');

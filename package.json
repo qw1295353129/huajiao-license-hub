@@ -2,7 +2,7 @@
   "name": "license-hub",
   "version": "0.1.0",
   "private": true,
-  "description": "LicenseHub - 面向个人运营者的软件授权管理系统",
+  "description": "花椒授权管理系统 - 面向个人运营者的软件授权发放与运营平台",
   "packageManager": "pnpm@12.4.2",
   "engines": {
     "node": ">=20"
